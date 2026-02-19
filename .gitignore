@@ -1,0 +1,33 @@
+# Flutter
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+*.iml
+*.log
+
+# Android
+android/.gradle/
+android/local.properties
+android/.idea/
+android/captures/
+android/key.properties
+android/.kotlin/
+
+# iOS
+ios/.symlinks/
+ios/Pods/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Other
+*.class
+*.lock
