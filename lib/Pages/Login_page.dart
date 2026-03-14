@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-
-// Import your dashboard pages here
-import 'Admin.dart';
-import 'Parent.dart';
-import 'Student.dart';
+import 'package:safeway/Pages/Parents/Parent_Dashboard.dart';
+import 'package:safeway/Pages/Student/Dashboard.dart';
+import 'package:safeway/pages/Student.dart';
+import 'package:safeway/Pages/Driver/DriverDashBoard.dart';
+import 'package:safeway/services/auth_service.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -13,280 +13,236 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
-  
-  // Track selected role (Student or Parent)
-  String _selectedRole = 'Student';
-  
-  // Admin credentials
-  final String adminUsername = 'admin';
-  final String adminPassword = 'admin@123';
-  
-  // Student credentials
-  final String studentUsername = 'Student';
-  final String studentPassword = 'Student@123';
-  
-  // Parent credentials
-  final String parentUsername = 'Parent';
-  final String parentPassword = 'Parent@123';
+  bool rememberMe = false;
+  bool hidePassword = true;
+  bool isLoading = false;
 
-  @override
-  void initState() {
-    super.initState();
-    // Set default credentials for Student
-    _usernameController.text = studentUsername;
-    _passwordController.text = studentPassword;
-  }
-
-  @override
-  void dispose() {
-    _usernameController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  void _handleLogin() {
-    String username = _usernameController.text.trim();
-    String password = _passwordController.text.trim();
-
-    // Check if admin credentials (works from any role selection)
-    if (username == adminUsername && password == adminPassword) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const Admin()),
-      );
-      return;
-    }
-
-    // Check based on selected role
-    if (_selectedRole == 'Student') {
-      if (username == studentUsername && password == studentPassword) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const Student()),
-        );
-      } else {
-        _showErrorDialog('Invalid student credentials');
-      }
-    } else if (_selectedRole == 'Parent') {
-      if (username == parentUsername && password == parentPassword) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const Parent()),
-        );
-      } else {
-        _showErrorDialog('Invalid parent credentials');
-      }
-    }
-  }
-
-  void _showErrorDialog(String message) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Login Failed'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _switchRole(String role) {
-    setState(() {
-      _selectedRole = role;
-      // Update default credentials based on role
-      if (role == 'Student') {
-        _usernameController.text = studentUsername;
-        _passwordController.text = studentPassword;
-      } else {
-        _usernameController.text = parentUsername;
-        _passwordController.text = parentPassword;
-      }
-    });
-  }
+  final AuthService _authService = AuthService();
+  final emailController = TextEditingController();
+  final passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5),
+      backgroundColor: const Color(0xFFEAEFF7),
       body: Center(
         child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
+          padding: const EdgeInsets.all(24),
+          child: Container(
+            padding: const EdgeInsets.all(28),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Bus Icon
-                Container(
-                  width: 80,
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: const Icon(
-                    Icons.directions_bus,
-                    size: 40,
-                    color: Color(0xFF2196F3),
-                  ),
-                ),
-                const SizedBox(height: 32),
-                
-                // Welcome Back Text
-                const Text(
-                  'Welcome Back',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF212121),
-                  ),
-                ),
-                const SizedBox(height: 40),
-                
-                // Role Selection (Student/Parent)
-                Container(
-                  constraints: const BoxConstraints(maxWidth: 400),
+                Center(
                   child: Row(
-                    children: [
-                      Expanded(
-                        child: _buildRoleButton(
-                          'Student',
-                          Icons.school,
-                          _selectedRole == 'Student',
-                        ),
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(
+                        Icons.directions_bus_rounded,
+                        color: Color(0xFF4F46E5),
+                        size: 30,
                       ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: _buildRoleButton(
-                          'Parent',
-                          Icons.person,
-                          _selectedRole == 'Parent',
+                      SizedBox(width: 8),
+                      Text(
+                        'Smart Bus',
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A2E),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 32),
-                
-                // Login Form
-                Container(
-                  constraints: const BoxConstraints(maxWidth: 400),
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                const SizedBox(height: 8),
+                const Center(
+                  child: Text(
+                    'Sign in to your account',
+                    style: TextStyle(color: Colors.grey, fontSize: 14),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$_selectedRole Login',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF212121),
-                        ),
+                ),
+                const SizedBox(height: 32),
+                const Text(
+                  'ID',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF444444)),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: InputDecoration(
+                    hintText: 'Enter your email',
+                    prefixIcon: const Icon(
+                      Icons.email_outlined,
+                      color: Colors.grey,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Password',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF444444)),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: passwordController,
+                  obscureText: hidePassword,
+                  decoration: InputDecoration(
+                    hintText: 'Enter your password',
+                    prefixIcon: const Icon(
+                      Icons.lock_outline,
+                      color: Colors.grey,
+                    ),
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        hidePassword
+                            ? Icons.visibility_off_outlined
+                            : Icons.visibility_outlined,
+                        color: Colors.grey,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Enter your credentials to access the $_selectedRole dashboard.',
-                        style: const TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF757575),
+                      onPressed: () {
+                        setState(() {
+                          hidePassword = !hidePassword;
+                        });
+                      },
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: Color(0xFFE0E0E0)),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Checkbox(
+                          value: rememberMe,
+                          activeColor: const Color(0xFF4F46E5),
+                          onChanged: (value) {
+                            setState(() {
+                              rememberMe = value!;
+                            });
+                          },
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      
-                      // Username Field
-                      const Text(
-                        'Username',
+                        const Text(
+                          'Remember me',
+                          style: TextStyle(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                    TextButton(
+                      onPressed: () {},
+                      child: const Text(
+                        'Forgot password?',
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF212121),
+                          color: Color(0xFF4F46E5),
+                          fontSize: 10,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _usernameController,
-                        decoration: InputDecoration(
-                          hintText: _selectedRole,
-                          filled: true,
-                          fillColor: const Color(0xFFF5F5F5),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                        ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: isLoading
+                        ? null
+                        : () async {
+                            setState(() => isLoading = true);
+
+                            final result = await _authService.login(
+                              emailController.text.trim(),
+                              passwordController.text.trim(),
+                            );
+
+                            setState(() => isLoading = false);
+
+                            if (result['success']) {
+                              String role = result['role'];
+
+                              if (role == 'Parent') {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        const ParentDashboardScreen(),
+                                  ),
+                                );
+                              } else if (role == 'Student') {
+                                Navigator.pushReplacement(context,
+                                  MaterialPageRoute(builder: (_) => const StudentDashboardScreen()));
+                              } else if (role == 'Driver') {
+                                Navigator.pushReplacement(context,
+                                  MaterialPageRoute(builder: (_) => const DriverDashboardScreen()));
+                              } else if (role == 'Admin') {
+                                // Navigator.pushReplacement(context,
+                                //   MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
+                              }
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(result['message']),
+                                  backgroundColor: Colors.red,
+                                ),
+                              );
+                            }
+                          },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF4F46E5),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      const SizedBox(height: 20),
-                      
-                      // Password Field
-                      const Text(
-                        'Password',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF212121),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: _passwordController,
-                        obscureText: true,
-                        decoration: InputDecoration(
-                          hintText: 'password',
-                          filled: true,
-                          fillColor: const Color(0xFFF5F5F5),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 16,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      
-                      // Sign In Button
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: _handleLogin,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2196F3),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
+                    ),
+                    child: isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
                             'Sign In',
                             style: TextStyle(
                               fontSize: 16,
-                              fontWeight: FontWeight.w500,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
                             ),
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Center(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text(
+                        "Don't have an account? ",
+                        style: TextStyle(fontSize: 13),
+                      ),
+                      GestureDetector(
+                        onTap: () {},
+                        child: const Text(
+                          'Sign up',
+                          style: TextStyle(
+                            color: Color(0xFF4F46E5),
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
@@ -296,49 +252,6 @@ class _LoginPageState extends State<LoginPage> {
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRoleButton(String role, IconData icon, bool isSelected) {
-    return GestureDetector(
-      onTap: () => _switchRole(role),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.white : Colors.transparent,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: isSelected ? Colors.transparent : const Color(0xFFE0E0E0),
-          ),
-          boxShadow: isSelected
-              ? [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ]
-              : null,
-        ),
-        child: Column(
-          children: [
-            Icon(
-              icon,
-              color: isSelected ? const Color(0xFF2196F3) : const Color(0xFF757575),
-              size: 24,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              role,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                color: isSelected ? const Color(0xFF212121) : const Color(0xFF757575),
-              ),
-            ),
-          ],
         ),
       ),
     );

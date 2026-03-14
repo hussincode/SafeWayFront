@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:safeway/Pages/Parents/Live_Bus_Tracker.dart';
-import 'package:safeway/services/auth_service.dart';
 
 
 class ParentDashboardScreen extends StatelessWidget {
