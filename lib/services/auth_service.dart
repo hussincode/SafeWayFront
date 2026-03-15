@@ -31,11 +31,18 @@ class AuthService {
         await storage.write(key: 'role', value: data['role']);
         await storage.write(key: 'fullName', value: data['fullName']);
         await storage.write(key: 'uniqueID', value: data['uniqueID']);
+        // After successful login, save ALL these:
+await storage.write(key: 'token',    value: data['token']);
+await storage.write(key: 'userId',   value: data['id'].toString()); // ← this must exist
+await storage.write(key: 'fullName', value: data['fullName']);
+await storage.write(key: 'uniqueID', value: data['uniqueID']);
+await storage.write(key: 'role',     value: data['role']);
 
         return {'success': true, 'role': data['role']};
       } else {
         return {'success': false, 'message': data['message']};
       }
+      
     } catch (e) {
       return {'success': false, 'message': 'Cannot connect to server.'};
     }
@@ -43,5 +50,8 @@ class AuthService {
 
   Future<void> logout() async {
     await storage.deleteAll();
+    
   }
+
+  
 }

@@ -149,16 +149,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       ],
                     ),
-                    TextButton(
-                      onPressed: () {},
-                      child: const Text(
-                        'Forgot password?',
-                        style: TextStyle(
-                          color: Color(0xFF4F46E5),
-                          fontSize: 10,
-                        ),
-                      ),
-                    ),
+                    
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -227,28 +218,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
                 const SizedBox(height: 20),
-                Center(
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text(
-                        "Don't have an account? ",
-                        style: TextStyle(fontSize: 13),
-                      ),
-                      GestureDetector(
-                        onTap: () {},
-                        child: const Text(
-                          'Sign up',
-                          style: TextStyle(
-                            color: Color(0xFF4F46E5),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+                
               ],
             ),
           ),
