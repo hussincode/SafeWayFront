@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'package:safeway/services/api_config.dart';
 import 'package:safeway/services/location_service.dart';
 import 'package:safeway/Pages/Student/change_pickup_station_screen.dart';
+import 'package:safeway/Pages/login_page.dart';
+import 'package:safeway/Pages/Student/Request_Route_Change.dart';
 
 // ── Models ──
 class SubscriptionModel {
@@ -59,7 +61,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   // ── Bus tracking ──
   LatLng _busLocation = const LatLng(24.7136, 46.6753);
-  LatLng _myStop      = const LatLng(24.7200, 46.6800);
+  final LatLng _myStop      = const LatLng(24.7200, 46.6800);
   String _eta         = 'Loading...';
   bool   _isConnected = false;
   Timer? _refreshTimer;
@@ -238,7 +240,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           GestureDetector(
-            onTap: () => Navigator.pop(context),
+            onTap: () {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (Route<dynamic> route) => false,
+    );
+  },
             child: const Row(children: [
               Icon(Icons.arrow_back_ios, color: Colors.white70, size: 14),
               SizedBox(width: 4),
@@ -298,18 +305,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
           const SizedBox(height: 16),
           Row(children: [
-            // ✅ Real bus number from DB
+            //Real bus number from DB
             Expanded(child: _infoBox('Bus Number', busNumber, const Color(0xFFF0F0FF), const Color(0xFF4F46E5))),
             const SizedBox(width: 12),
-            // ✅ Real driver name from DB
+            //Real driver name from DB
             Expanded(child: _infoBox('Driver', driverName, const Color(0xFFF0FFF4), const Color(0xFF16A34A))),
           ]),
           const SizedBox(height: 12),
           Row(children: [
-            // ✅ Real ETA from live location
+            //Real ETA from live location
             Expanded(child: _infoBox('ETA', _eta, const Color(0xFFFFF7ED), const Color(0xFFEA580C))),
             const SizedBox(width: 12),
-            // ✅ Real stop name from DB
+            //Real stop name from DB
             Expanded(child: _infoBox('Next Stop', _studentInfo?.stopName ?? '...', const Color(0xFFFFF0F9), const Color(0xFFDB2777))),
           ]),
         ],
@@ -505,7 +512,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               child: Row(children: [
                 const Icon(Icons.access_time, color: Colors.white, size: 13),
                 const SizedBox(width: 4),
-                // ✅ Real ETA calculated from distance
+                //Real ETA calculated from distance
                 Text('ETA: $_eta',
                     style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
               ]),
@@ -637,7 +644,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             child: _actionButton(Icons.location_on_outlined, 'Change Pickup Station', const Color(0xFF4F46E5)),
           ),
           const SizedBox(height: 10),
-          _actionButton(Icons.send_outlined, 'Request Route Change', const Color(0xFF4F46E5)),
+          GestureDetector(
+  behavior: HitTestBehavior.opaque, // ← add this
+  onTap: () => Navigator.push(context,
+      MaterialPageRoute(builder: (_) => const RequestRouteChangePage())),
+  child: _actionButton(Icons.swap_horiz_outlined, 'Request Route Change', const Color(0xFF4F46E5)),
+),
+          
         ],
       ),
     );
@@ -676,43 +689,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               child: const Text('1', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
             ),
           ]),
-          const SizedBox(height: 14),
-          _notifItem(icon: Icons.access_time, iconColor: const Color(0xFF4F46E5), borderColor: const Color(0xFF4F46E5),
-              text: 'Bus ${_studentInfo?.busNumber ?? 'BUS'} arriving at ${_studentInfo?.stopName ?? 'your stop'} in 5 minutes',
-              time: '', isUnread: true),
-          const SizedBox(height: 10),
-          _notifItem(icon: Icons.check_circle_outline, iconColor: const Color(0xFF16A34A), borderColor: const Color(0xFF16A34A),
-              text: 'You have boarded the bus successfully', time: '15m ago'),
-          const SizedBox(height: 10),
-          _notifItem(icon: Icons.warning_amber_outlined, iconColor: const Color(0xFFEA580C), borderColor: const Color(0xFFEA580C),
-              text: 'Bus ${_studentInfo?.busNumber ?? 'BUS'} delayed by 10 minutes due to traffic', time: '30m ago'),
+        
+          
         ],
       ),
     );
   }
 
-  Widget _notifItem({required IconData icon, required Color iconColor, required Color borderColor, required String text, required String time, bool isUnread = false}) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        border: Border(left: BorderSide(color: borderColor, width: 3)),
-        color: Colors.grey[50],
-      ),
-      child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Icon(icon, color: iconColor, size: 18), const SizedBox(width: 10),
-        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(text, style: const TextStyle(fontSize: 13, color: Color(0xFF374151))),
-          if (time.isNotEmpty) ...[
-            const SizedBox(height: 4),
-            Text(time, style: const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF))),
-          ],
-        ])),
-        if (isUnread)
-          Container(width: 8, height: 8, decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle)),
-      ]),
-    );
-  }
+  
 
   Widget _card({required Widget child}) {
     return Container(

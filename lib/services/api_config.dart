@@ -9,6 +9,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 ///   a dart-define or by editing this file.
 String get apiBaseUrl {
   if (kIsWeb) return 'http://localhost:5143';
-  if (Platform.isAndroid) return 'http://192.168.100.46:5143';  // For real Android device on same network
+  if (Platform.isAndroid) return 'http://10.0.2.2:5143';  // For Android emulator
   return 'http://localhost:5143';
 }

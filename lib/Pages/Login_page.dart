@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:safeway/Pages/Parents/Parent_Dashboard.dart';
 import 'package:safeway/Pages/Student/Dashboard.dart';
-import 'package:safeway/pages/Student.dart';
 import 'package:safeway/Pages/Driver/DriverDashBoard.dart';
 import 'package:safeway/services/auth_service.dart';
+import 'package:safeway/Pages/Admin/AdminDashBoard.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -187,8 +187,8 @@ class _LoginPageState extends State<LoginPage> {
                                 Navigator.pushReplacement(context,
                                   MaterialPageRoute(builder: (_) => const DriverDashboardScreen()));
                               } else if (role == 'Admin') {
-                                // Navigator.pushReplacement(context,
-                                //   MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
+                                Navigator.pushReplacement(context,
+                                  MaterialPageRoute(builder: (_) => const AdminDashboardScreen()));
                               }
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(

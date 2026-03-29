@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:safeway/services/location_service.dart';
 
 class DriverDashboardScreen extends StatefulWidget {
   const DriverDashboardScreen({super.key});
