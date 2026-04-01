@@ -84,6 +84,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Future<void> _init() async {
+    // Start sharing student location to API
+LocationService.startStudentSharing();
   // Debug — check what's saved in storage
   final userIdStr  = await _storage.read(key: 'userId')   ?? '0';
   final fullName   = await _storage.read(key: 'fullName') ?? '';
@@ -112,6 +114,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   _fetchBusLocation();
   _refreshTimer = Timer.periodic(
     const Duration(seconds: 5), (_) => _fetchBusLocation(),
+    
   );
 }
 
@@ -164,7 +167,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   // ── Fetch live bus location ──
   Future<void> _fetchBusLocation() async {
-    final location = await LocationService.getBusLocation();
+    final location = await LocationService.getStudentLocation();
     if (!mounted) return;
 
     if (location != null) {
