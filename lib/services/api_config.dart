@@ -8,7 +8,5 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// - Real devices: set this to your machine's LAN IP (e.g. 192.168.x.x) via
 ///   a dart-define or by editing this file.
 String get apiBaseUrl {
-  if (kIsWeb) return 'http://localhost:5143';
-  if (Platform.isAndroid) return 'http://10.0.2.2:5143';  // For Android emulator
-  return 'http://localhost:5143';
+  return 'http://safewayback.runasp.net';
 }

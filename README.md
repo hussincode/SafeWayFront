@@ -92,14 +92,12 @@ flutter pub get
 
 ### 3. Connect to the backend
 
-Open `lib/services/auth_service.dart` and update the base URL:
+Open `lib/services/api_config.dart` and update the base URL if needed:
 
 ```dart
-// For emulator
-static const String baseUrl = 'http://10.0.2.2:5143';
-
-// For real phone (use your PC IP)
-static const String baseUrl = 'http://YOUR_PC_IP:5143';
+String get apiBaseUrl {
+  return 'http://safewayback.runasp.net';
+}
 ```
 
 To find your PC IP run:
