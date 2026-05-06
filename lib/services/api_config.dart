@@ -1,5 +1,3 @@
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Base URL for backend API.
 ///
@@ -8,5 +6,5 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 /// - Real devices: set this to your machine's LAN IP (e.g. 192.168.x.x) via
 ///   a dart-define or by editing this file.
 String get apiBaseUrl {
-  return 'http://safewayback.runasp.net';
+  return 'http://localhost:5143';
 }

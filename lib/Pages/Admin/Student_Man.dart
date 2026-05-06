@@ -57,8 +57,8 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
   List<StudentRecord> _filtered       = [];
   bool                _loading        = true;
   String              _searchQuery    = '';
-  String              _filterRoute    = '';
-  String              _filterStatus   = '';
+  final String              _filterRoute    = '';
+  final String              _filterStatus   = '';
 
   final _searchCtrl = TextEditingController();
 
@@ -163,6 +163,8 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          _buildExportButton(),
+                          const SizedBox(height: 16),
                           _buildFiltersCard(),
                           const SizedBox(height: 16),
                           _buildStudentTable(),
@@ -219,42 +221,81 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
               ],
             ),
           ),
-          // Export button
+
+          // Export button (outlined)
+        ]
+      ),
+    );
+  }
+
+
+  // Keeping this method only if you still need the old export card UI.
+  // Currently unused (replaced by the top-row OutlinedButton / ElevatedButton).
+  Widget _buildExportButton() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          
+          
           OutlinedButton.icon(
             onPressed: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Exporting...'))),
+              const SnackBar(content: Text('Exporting...')),
+            ),
             icon: const Icon(Icons.upload_outlined, size: 14),
-            label: const Text('Export',
-                style: TextStyle(fontSize: 12)),
+            label: const Text(
+              'Export',
+              style: TextStyle(fontSize: 12),
+            ),
             style: OutlinedButton.styleFrom(
               foregroundColor: const Color(0xFF374151),
               side: const BorderSide(color: Color(0xFFD1D5DB)),
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
+
           const SizedBox(width: 8),
-          // Add Student button
+
+          // Add Student button (elevated)
           ElevatedButton.icon(
             onPressed: () => _showAddStudentDialog(),
             icon: const Icon(Icons.add, size: 14, color: Colors.white),
-            label: const Text('Add Student',
-                style: TextStyle(fontSize: 12, color: Colors.white)),
+            label: const Text(
+              'Add Student',
+              style: TextStyle(fontSize: 12, color: Colors.white),
+            ),
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFF4F46E5),
               elevation: 0,
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8)),
+                borderRadius: BorderRadius.circular(8),
+              ),
             ),
           ),
         ],
       ),
-    );
+      
+      );
+    
   }
+
+
 
   // ── FILTERS CARD ─────────────────────────────────────────────────────────────
   Widget _buildFiltersCard() {
@@ -315,86 +356,13 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
             ),
           ),
 
-          const SizedBox(height: 14),
-
-          // Filter by Route
-          const Text('Filter by Route',
-              style: TextStyle(fontSize: 13,
-                  fontWeight: FontWeight.w600, color: Color(0xFF374151))),
-          const SizedBox(height: 8),
-          _buildDropdownFilter(
-            hint: 'All Routes',
-            value: _filterRoute.isEmpty ? null : _filterRoute,
-            items: _routes,
-            onChanged: (v) {
-              _filterRoute = v ?? '';
-              _applyFilters();
-            },
-          ),
-
-          const SizedBox(height: 14),
-
-          // Filter by Status
-          const Text('Filter by Status',
-              style: TextStyle(fontSize: 13,
-                  fontWeight: FontWeight.w600, color: Color(0xFF374151))),
-          const SizedBox(height: 8),
-          _buildDropdownFilter(
-            hint: 'All Statuses',
-            value: _filterStatus.isEmpty ? null : _filterStatus,
-            items: _statuses,
-            onChanged: (v) {
-              _filterStatus = v ?? '';
-              _applyFilters();
-            },
-          ),
+          
         ],
       ),
     );
   }
 
-  Widget _buildDropdownFilter({
-    required String hint,
-    required String? value,
-    required List<String> items,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String>(
-          value: value,
-          isExpanded: true,
-          hint: Row(children: [
-            const Icon(Icons.filter_list,
-                size: 16, color: Color(0xFF9CA3AF)),
-            const SizedBox(width: 8),
-            Text(hint,
-                style: const TextStyle(
-                    fontSize: 13, color: Color(0xFF9CA3AF))),
-          ]),
-          icon: const Icon(Icons.keyboard_arrow_down_rounded,
-              color: Color(0xFF9CA3AF), size: 18),
-          style: const TextStyle(fontSize: 13, color: Color(0xFF374151)),
-          items: [
-            DropdownMenuItem<String>(
-              value: null,
-              child: Text(hint,
-                  style: const TextStyle(color: Color(0xFF9CA3AF))),
-            ),
-            ...items.map((item) =>
-                DropdownMenuItem(value: item, child: Text(item))),
-          ],
-          onChanged: onChanged,
-        ),
-      ),
-    );
-  }
+ 
 
   // ── STUDENT TABLE ─────────────────────────────────────────────────────────────
   Widget _buildStudentTable() {
@@ -439,24 +407,24 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
             padding: const EdgeInsets.symmetric(
                 horizontal: 16, vertical: 10),
             child: Row(children: const [
-              Expanded(flex: 5,
+              Expanded(flex: 2,
                   child: Text('STUDENT',
                       style: TextStyle(fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF9CA3AF),
-                          letterSpacing: 0.5))),
-              Expanded(flex: 3,
-                  child: Text('STUDENT ID',
-                      style: TextStyle(fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF9CA3AF),
-                          letterSpacing: 0.5))),
-              Expanded(flex: 4,
+                          letterSpacing: 0))),
+              Expanded(flex: 2,
                   child: Text('ROUTE',
                       style: TextStyle(fontSize: 10,
                           fontWeight: FontWeight.w700,
                           color: Color(0xFF9CA3AF),
-                          letterSpacing: 0.5))),
+                          letterSpacing: 0))),
+              Expanded(flex: 2,
+                  child: Text('PAID SUBSCREPTION',
+                      style: TextStyle(fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF9CA3AF),
+                          letterSpacing: 0))),
             ]),
           ),
 
@@ -477,7 +445,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               itemCount: _filtered.length,
-              separatorBuilder: (_, __) => const Divider(
+              separatorBuilder: (_, _) => const Divider(
                   height: 1, color: Color(0xFFF3F4F6)),
               itemBuilder: (_, i) => _buildStudentRow(_filtered[i]),
             ),
@@ -537,7 +505,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
             // Student ID
             Expanded(
               flex: 3,
-              child: Text(s.uniqueID,
+              child: Text(s.routeName,
                   style: const TextStyle(fontSize: 13,
                       color: Color(0xFF374151))),
             ),
@@ -545,7 +513,7 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
             // Route
             Expanded(
               flex: 4,
-              child: Text(s.routeName,
+              child: Text(s.subscriptionStatus,
                   style: const TextStyle(fontSize: 12,
                       color: Color(0xFF6B7280))),
             ),
