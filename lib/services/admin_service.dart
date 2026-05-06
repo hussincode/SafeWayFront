@@ -1,8 +1,10 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
+
 class AdminService {
   final String baseUrl = "http://localhost:5143/api/admin"; // Backend port
+
 
   // Get complete dashboard summary
   Future<Map<String, dynamic>> getDashboardSummary() async {
@@ -67,4 +69,44 @@ class AdminService {
       rethrow;
     }
   }
+
+  // Get drivers (Admin -> Manage Drivers)
+  Future<List<dynamic>> getDrivers() async {
+    try {
+      final response = await http.get(Uri.parse('$baseUrl/drivers'));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load drivers');
+      }
+    } catch (e) {
+      print('Error: $e');
+      rethrow;
+    }
+  }
+
+  // Add driver (POST)
+  Future<void> addDriver({required String fullName, required String busNumber, required String phone, required String routeName}) async {
+    final payload = {
+      'fullName': fullName,
+      'busNumber': busNumber,
+      'phone': phone,
+      'routeName': routeName,
+    };
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/drivers'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode != 200) {
+      // surface backend JSON body (e.g. { message, error }) for better debugging
+      throw Exception('Failed to add driver (${response.statusCode}): ${response.body}');
+    }
+
+  }
 }
+
+
