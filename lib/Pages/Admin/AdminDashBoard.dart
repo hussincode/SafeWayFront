@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:safeway/Pages/Admin/Manage_Drivers.dart';
+import 'package:safeway/Pages/Admin/Route_Man.dart' show ManageRoutesScreen;
 import 'package:safeway/Pages/Admin/Student_Man.dart' show ManageStudentsScreen;
 import 'package:safeway/Pages/Admin/RecentActivitiesCard.dart';
 import 'package:safeway/services/admin_service.dart';
@@ -582,6 +583,7 @@ _driverTrend = _generateDriverTrend(_driverCount ?? 0);
           }),
           const SizedBox(height: 10),
           _quickActionBtn(Icons.alt_route_outlined, 'Manage Routes', const Color(0xFFF0FFF4), const Color(0xFF16A34A), () {
+            Navigator.push(context, MaterialPageRoute(builder: (context) => const ManageRoutesScreen()));
           }),
         ],
       ),

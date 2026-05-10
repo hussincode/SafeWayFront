@@ -372,9 +372,13 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: [BoxShadow(
+        boxShadow: [
+          BoxShadow(
             color: Colors.black.withOpacity(0.04),
-            blurRadius: 8, offset: const Offset(0, 2))],
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          )
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -383,23 +387,62 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 14),
+              horizontal: 16,
+              vertical: 14,
+            ),
             decoration: const BoxDecoration(
               gradient: LinearGradient(
-                colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+                colors: [
+                  Color(0xFF4F46E5),
+                  Color(0xFF7C3AED),
+                ],
               ),
               borderRadius: BorderRadius.vertical(
-                  top: Radius.circular(16)),
+                top: Radius.circular(16),
+              ),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Student Records',
-                    style: TextStyle(color: Colors.white,
-                        fontSize: 15, fontWeight: FontWeight.bold)),
-                Text('Showing 1-${_filtered.length} of ${_filtered.length}',
-                    style: const TextStyle(
-                        color: Colors.white70, fontSize: 12)),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Student Records',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            'Showing 1-${_filtered.take(2).length} of ${_filtered.length}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pushNamed(context, '/students-more');
+                      },
+                      child: const Text(
+                        'View more',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -407,48 +450,79 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
           // Column labels
           Padding(
             padding: const EdgeInsets.symmetric(
-                horizontal: 16, vertical: 10),
-            child: Row(children: const [
-              Expanded(flex: 2,
-                  child: Text('STUDENT',
-                      style: TextStyle(fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF9CA3AF),
-                          letterSpacing: 0))),
-              Expanded(flex: 2,
-                  child: Text('ROUTE',
-                      style: TextStyle(fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF9CA3AF),
-                          letterSpacing: 0))),
-              Expanded(flex: 2,
-                  child: Text('PAID SUBSCREPTION',
-                      style: TextStyle(fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          color: Color(0xFF9CA3AF),
-                          letterSpacing: 0))),
-            ]),
+              horizontal: 16,
+              vertical: 10,
+            ),
+            child: Row(
+              children: const [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'STUDENT',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF9CA3AF),
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'ROUTE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF9CA3AF),
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'PAID SUBSCREPTION',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF9CA3AF),
+                      letterSpacing: 0,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
 
-          const Divider(height: 1, color: Color(0xFFF3F4F6)),
+          const Divider(
+            height: 1,
+            color: Color(0xFFF3F4F6),
+          ),
 
           // Rows
           if (_filtered.isEmpty)
             const Padding(
               padding: EdgeInsets.all(24),
               child: Center(
-                child: Text('No students match your filters.',
-                    style: TextStyle(
-                        fontSize: 13, color: Color(0xFF9CA3AF))),
+                child: Text(
+                  'No students match your filters.',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFF9CA3AF),
+                  ),
+                ),
               ),
             )
           else
             ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _filtered.length,
-              separatorBuilder: (_, _) => const Divider(
-                  height: 1, color: Color(0xFFF3F4F6)),
+              itemCount: _filtered.take(2).length,
+              separatorBuilder: (_, __) => const Divider(
+                height: 1,
+                color: Color(0xFFF3F4F6),
+              ),
               itemBuilder: (_, i) => _buildStudentRow(_filtered[i]),
             ),
         ],

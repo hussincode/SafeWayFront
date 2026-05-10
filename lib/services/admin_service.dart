@@ -53,7 +53,8 @@ class AdminService {
     }
   }
 
-  // Get active routes
+  // Get active routes (full data for ManageRoutes page)
+  // (legacy) Get active routes
   Future<List<dynamic>> getRoutes() async {
     try {
       final routeBase = baseUrl.replaceFirst(
@@ -63,15 +64,37 @@ class AdminService {
       final response = await http.get(Uri.parse('$routeBase/routes'));
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return jsonDecode(response.body) as List<dynamic>;
       } else {
-        throw Exception('Failed to load routes');
+        throw Exception('Failed to load routes (${response.statusCode}): ${response.body}');
       }
     } catch (e) {
       print('Error: $e');
       rethrow;
     }
   }
+
+
+  // Get stations (full data for ManageRoutes page)
+  Future<List<dynamic>> getStations() async {
+    try {
+      final routeBase = baseUrl.replaceFirst(
+        '/api/admin',
+        '/api/routechangerequests',
+      );
+      final response = await http.get(Uri.parse('$routeBase/stations'));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as List<dynamic>;
+      } else {
+        throw Exception('Failed to load stations (${response.statusCode}): ${response.body}');
+      }
+    } catch (e) {
+      print('Error: $e');
+      rethrow;
+    }
+  }
+
 
   // Get activities
   Future<List<dynamic>> getActivities() async {
@@ -192,7 +215,11 @@ class AdminService {
 
     final response = await http.post(
       Uri.parse('$baseUrl/students'),
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        // Some ASP.NET setups require a user-agent; harmless otherwise.
+        'Accept': 'application/json',
+      },
       body: jsonEncode(payload),
     );
 
