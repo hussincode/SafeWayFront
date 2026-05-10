@@ -1,12 +1,11 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
-
 class AdminService {
   final String baseUrl = "http://localhost:5143/api/admin"; // Backend port
 
-
   // Get complete dashboard summary
+
   Future<Map<String, dynamic>> getDashboardSummary() async {
     try {
       final response = await http.get(Uri.parse('$baseUrl/dashboard-summary'));
@@ -54,6 +53,26 @@ class AdminService {
     }
   }
 
+  // Get active routes
+  Future<List<dynamic>> getRoutes() async {
+    try {
+      final routeBase = baseUrl.replaceFirst(
+        '/api/admin',
+        '/api/routechangerequests',
+      );
+      final response = await http.get(Uri.parse('$routeBase/routes'));
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to load routes');
+      }
+    } catch (e) {
+      print('Error: $e');
+      rethrow;
+    }
+  }
+
   // Get activities
   Future<List<dynamic>> getActivities() async {
     try {
@@ -86,8 +105,12 @@ class AdminService {
     }
   }
 
-  // Add driver (POST)
-  Future<void> addDriver({required String fullName, required String busNumber, required String phone, required String routeName}) async {
+  Future<void> addDriver({
+    required String fullName,
+    required String busNumber,
+    required String phone,
+    required String routeName,
+  }) async {
     final payload = {
       'fullName': fullName,
       'busNumber': busNumber,
@@ -103,10 +126,80 @@ class AdminService {
 
     if (response.statusCode != 200) {
       // surface backend JSON body (e.g. { message, error }) for better debugging
-      throw Exception('Failed to add driver (${response.statusCode}): ${response.body}');
+      throw Exception(
+        'Failed to add driver (${response.statusCode}): ${response.body}',
+      );
     }
+  }
 
+  // Update driver (PUT)
+  Future<void> updateDriver({
+    required int id,
+    required String fullName,
+    required String busNumber,
+    required String phone,
+    required String routeName,
+  }) async {
+    final payload = {
+      'fullName': fullName,
+      'busNumber': busNumber,
+      'phone': phone,
+      'routeName': routeName,
+    };
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/drivers/$id'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to update driver (${response.statusCode}): ${response.body}',
+      );
+    }
+  }
+
+  // Delete driver (DELETE)
+  Future<void> deleteDriver({required int id}) async {
+    final response = await http.delete(
+      Uri.parse('$baseUrl/drivers/$id'),
+      headers: const {'Content-Type': 'application/json'},
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to delete driver (${response.statusCode}): ${response.body}',
+      );
+    }
+  }
+
+  // Add student (POST)
+  Future<void> addStudent({
+    required String fullName,
+    required String uniqueID,
+    required String busNumber,
+    required String routeName,
+    required String grade,
+  }) async {
+    final payload = {
+      'fullName': fullName,
+      'uniqueID': uniqueID,
+      'busNumber': busNumber,
+      'routeName': routeName,
+      'grade': grade,
+    };
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/students'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to add student (${response.statusCode}): ${response.body}',
+      );
+    }
   }
 }
-
-

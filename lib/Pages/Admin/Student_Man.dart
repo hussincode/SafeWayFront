@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:safeway/services/api_config.dart';
+import 'package:safeway/services/admin_service.dart';
+
 
 // ── Models ───────────────────────────────────────────────────────────────────
 
@@ -665,27 +667,377 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
     );
   }
 
-  // ── ADD STUDENT DIALOG ────────────────────────────────────────────────────────
+  // ── ADD STUDENT BOTTOM SHEET (like Add Driver) ────────────────────────────
   void _showAddStudentDialog() {
-    showDialog(
+    const orange = Color(0xFF4F46E5);
+
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16)),
-        title: const Text('Add Student',
-            style: TextStyle(fontSize: 16,
-                fontWeight: FontWeight.bold)),
-        content: const Text(
-            'Add student functionality coming soon.',
-            style: TextStyle(fontSize: 13, color: Color(0xFF6B7280))),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close',
-                style: TextStyle(color: Color(0xFF4F46E5))),
-          ),
-        ],
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddStudentSheet(
+        orange: orange,
+        onAdd: (fullName, uniqueID, busNumber, routeName, grade) async {
+          Navigator.pop(context);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Adding student...'),
+              backgroundColor: Color(0xFF4F46E5),
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+
+          try {
+            final adminService = AdminService();
+            await adminService.addStudent(
+              fullName: fullName,
+              uniqueID: uniqueID,
+              busNumber: busNumber,
+              routeName: routeName,
+              grade: grade,
+            );
+
+            await _loadStudents();
+
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Student added successfully'),
+                  backgroundColor: Color(0xFF16A34A),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          } catch (e) {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Failed to add student: $e'),
+                  backgroundColor: Colors.red,
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+        },
       ),
     );
   }
 }
+
+class _AddStudentSheet extends StatefulWidget {
+  final Color orange;
+  final Future<void> Function(
+    String fullName,
+    String uniqueID,
+    String busNumber,
+    String routeName,
+    String grade,
+  ) onAdd;
+
+  const _AddStudentSheet({
+    required this.orange,
+    required this.onAdd,
+  });
+
+  @override
+  State<_AddStudentSheet> createState() => _AddStudentSheetState();
+}
+
+class _AddStudentSheetState extends State<_AddStudentSheet> {
+  final _fullNameController = TextEditingController();
+  final _uniqueIdController = TextEditingController();
+  final AdminService _adminService = AdminService();
+
+  final List<String> _gradeOptions = ['Grade 10', 'Grade 11', 'Grade 12'];
+  List<String> _busOptions = [];
+  List<String> _routeOptions = [];
+
+  String? _selectedGrade;
+  String? _selectedBusNumber;
+  String? _selectedRouteName;
+
+  bool _loadingOptions = true;
+  String? _optionsError;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDropdownOptions();
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _uniqueIdController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadDropdownOptions() async {
+    setState(() {
+      _loadingOptions = true;
+      _optionsError = null;
+    });
+
+    try {
+      final results = await Future.wait([
+        _adminService.getBuses(),
+        _adminService.getRoutes(),
+      ]);
+
+      final buses = results[0];
+      final routes = results[1];
+
+      setState(() {
+        _busOptions = buses
+            .map((e) => e['id']?.toString() ?? '')
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList();
+        _routeOptions = routes
+            .map((e) => e['name']?.toString() ?? '')
+            .where((value) => value.isNotEmpty)
+            .toSet()
+            .toList();
+        _busOptions.sort();
+        _routeOptions.sort();
+
+        if (_gradeOptions.isNotEmpty && _selectedGrade == null) {
+          _selectedGrade = _gradeOptions.first;
+        }
+
+        if (_busOptions.isNotEmpty && _selectedBusNumber == null) {
+          _selectedBusNumber = _busOptions.first;
+        }
+
+        if (_routeOptions.isNotEmpty && _selectedRouteName == null) {
+          _selectedRouteName = _routeOptions.first;
+        }
+
+        _loadingOptions = false;
+      });
+    } catch (e) {
+      setState(() {
+        _optionsError = e.toString();
+        _loadingOptions = false;
+      });
+    }
+  }
+
+  Future<void> _submit() async {
+    final fullName = _fullNameController.text.trim();
+    final uniqueID = _uniqueIdController.text.trim();
+    final busNumber = _selectedBusNumber?.trim() ?? '';
+    final routeName = _selectedRouteName?.trim() ?? '';
+    final grade = _selectedGrade?.trim() ?? '';
+
+    if (fullName.isEmpty || uniqueID.isEmpty || busNumber.isEmpty || routeName.isEmpty || grade.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please fill required fields'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    await widget.onAdd(fullName, uniqueID, busNumber, routeName, grade);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: _loadingOptions
+            ? SizedBox(
+                height: 220,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text('Loading buses and routes...'),
+                    ],
+                  ),
+                ),
+              )
+            : _optionsError != null
+                ? SizedBox(
+                    height: 220,
+                    child: Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text('Failed to load options.', style: TextStyle(color: Colors.red[700])),
+                          const SizedBox(height: 8),
+                          Text(_optionsError!, style: const TextStyle(fontSize: 12, color: Colors.red)),
+                          const SizedBox(height: 12),
+                          ElevatedButton(
+                            onPressed: _loadDropdownOptions,
+                            style: ElevatedButton.styleFrom(backgroundColor: widget.orange),
+                            child: const Text('Retry'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Add New Student',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF1A1A2E),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _field(_fullNameController, 'Full Name', Icons.person_outline),
+                      _field(_uniqueIdController, 'UniqueID', Icons.badge_outlined),
+                      _dropdownField(
+                        label: 'Grade',
+                        value: _selectedGrade,
+                        icon: Icons.school_outlined,
+                        items: _gradeOptions,
+                        onChanged: (value) => setState(() => _selectedGrade = value),
+                      ),
+                      _dropdownField(
+                        label: 'Bus Number',
+                        value: _selectedBusNumber,
+                        icon: Icons.directions_bus_outlined,
+                        items: _busOptions,
+                        onChanged: (value) => setState(() => _selectedBusNumber = value),
+                      ),
+                      _dropdownField(
+                        label: 'Route Name',
+                        value: _selectedRouteName,
+                        icon: Icons.alt_route_outlined,
+                        items: _routeOptions,
+                        onChanged: (value) => setState(() => _selectedRouteName = value),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: _submit,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: widget.orange,
+                            foregroundColor: Colors.white,
+                            elevation: 0,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                          ),
+                          child: const Text(
+                            'Add Student',
+                            style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController ctrl, String hint, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: ctrl,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          prefixIcon: Icon(icon, color: Colors.grey[400], size: 18),
+          filled: true,
+          fillColor: const Color(0xFFF8F9FF),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: widget.orange),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _dropdownField({
+    required String label,
+    required String? value,
+    required IconData icon,
+    required List<String> items,
+    required void Function(String?) onChanged,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InputDecorator(
+        decoration: InputDecoration(
+          hintText: label,
+          hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          prefixIcon: Icon(icon, color: Colors.grey[400], size: 18),
+          filled: true,
+          fillColor: const Color(0xFFF8F9FF),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: widget.orange),
+          ),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<String>(
+            value: value,
+            isExpanded: true,
+            icon: const Icon(Icons.arrow_drop_down, color: Colors.grey),
+            items: items
+                .map((item) => DropdownMenuItem(value: item, child: Text(item, style: const TextStyle(fontSize: 14))))
+                .toList(),
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+    );
+  }
+}
+

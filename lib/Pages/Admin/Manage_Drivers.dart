@@ -4,6 +4,7 @@ import 'package:safeway/services/admin_service.dart';
 // ── DATA MODEL ──
 class Driver {
   final String id;
+  final String uniqueId; // for internal use, not from backend
   final String name;
   final String phone;
   final String busId;
@@ -19,6 +20,7 @@ class Driver {
     required this.route,
     required this.status,
     required this.avatarInitials,
+    required this.uniqueId,
   });
 
   bool get isActive => status == 'Active';
@@ -44,6 +46,7 @@ class Driver {
       route: (json['route'] ?? '').toString(),
       status: (json['status'] ?? 'Active').toString(),
       avatarInitials: initials.isEmpty ? '??' : initials,
+      uniqueId: (json['uniqueId'] ?? '').toString(),
     );
   }
 }
@@ -573,6 +576,12 @@ class _ManageDriversScreenState extends State<ManageDriversScreen> {
                 ],
               ),
             ),
+            const SizedBox(width: 8),
+            IconButton(
+              tooltip: 'Delete driver',
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              onPressed: () => _confirmDeleteDriver(driver),
+            ),
           ],
         ),
       ),
@@ -586,6 +595,53 @@ class _ManageDriversScreenState extends State<ManageDriversScreen> {
       builder: (_) => _DriverDetailsSheet(driver: driver),
     );
   }
+
+  Future<void> _confirmDeleteDriver(Driver driver) async {
+    final int? driverDbId = int.tryParse(driver.uniqueId);
+    if (driverDbId == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Invalid driver id'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final bool? ok = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete driver'),
+        content: Text('Are you sure you want to delete ${driver.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (ok != true) return;
+
+    try {
+      await _adminService.deleteDriver(id: driverDbId);
+      await _fetchDrivers();
+
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Driver deleted successfully'), backgroundColor: _green),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to delete driver: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
 
   // ── STAT CARDS ──
   Widget _buildStatCard(String label, int value, Color color, IconData icon) {
@@ -689,7 +745,17 @@ class _DriverDetailsSheet extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    showModalBottomSheet(
+                      context: context,
+                      isScrollControlled: true,
+                      backgroundColor: Colors.transparent,
+                      builder: (_) => _EditDriverSheet(
+                        driver: driver,
+                      ),
+                    );
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _orange,
                     foregroundColor: Colors.white,
@@ -734,6 +800,163 @@ class _DriverDetailsSheet extends StatelessWidget {
 }
 
 // ── ADD DRIVER BOTTOM SHEET ──
+class _EditDriverSheet extends StatefulWidget {
+  final Driver driver;
+  const _EditDriverSheet({required this.driver});
+
+  @override
+  State<_EditDriverSheet> createState() => _EditDriverSheetState();
+}
+
+class _EditDriverSheetState extends State<_EditDriverSheet> {
+  final _nameController = TextEditingController();
+  final _phoneController = TextEditingController();
+  final _busIdController = TextEditingController();
+  final _routeController = TextEditingController();
+
+  final AdminService _adminService = AdminService();
+
+  static const _orange = Color(0xFFFF9800);
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController.text = widget.driver.name;
+    _phoneController.text = widget.driver.phone;
+    _busIdController.text = widget.driver.busId;
+    _routeController.text = widget.driver.route;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _phoneController.dispose();
+    _busIdController.dispose();
+    _routeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final fullName = _nameController.text.trim();
+    final phone = _phoneController.text.trim();
+    final busId = _busIdController.text.trim();
+    final routeName = _routeController.text.trim();
+
+    if (fullName.isEmpty || busId.isEmpty || routeName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill required fields'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    try {
+      // backend expects int id. Our UI keeps it as string; try parse.
+      final driverId = int.tryParse(widget.driver.id);
+      if (driverId == null) {
+        throw Exception('Invalid driver id: ${widget.driver.id}');
+      }
+
+      await _adminService.updateDriver(
+        id: driverId,
+        fullName: fullName,
+        busNumber: busId,
+        phone: phone,
+        routeName: routeName,
+      );
+
+      if (!context.mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Driver updated successfully'), backgroundColor: _orange),
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update driver: $e'), backgroundColor: Colors.red),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      child: Container(
+        decoration: const BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+        ),
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Edit Driver',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+            ),
+            const SizedBox(height: 16),
+            _field(_nameController, 'Full Name', Icons.person_outline),
+            _field(_phoneController, 'Phone', Icons.phone_outlined),
+            _field(_busIdController, 'Bus Number', Icons.directions_bus_outlined),
+            _field(_routeController, 'Route Name', Icons.alt_route_outlined),
+            const SizedBox(height: 16),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _orange,
+                  foregroundColor: Colors.white,
+                  elevation: 0,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Save Changes', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _field(TextEditingController ctrl, String hint, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: ctrl,
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          prefixIcon: Icon(icon, color: Colors.grey[400], size: 18),
+          filled: true,
+          fillColor: const Color(0xFFF8F9FF),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _orange),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// existing add sheet
 class _AddDriverSheet extends StatefulWidget {
   final Future<void> Function(String fullName, String busNumber, String phone, String routeName) onAdd;
   const _AddDriverSheet({required this.onAdd});
