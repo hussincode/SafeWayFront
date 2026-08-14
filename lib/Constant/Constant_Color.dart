@@ -18,6 +18,7 @@ class AppColors {
   static const Color cardBg = Colors.white;
   static const Color inputBg = Color(0xFFF3F4F1);
   static const Color divider = Color(0xFFE5E7EB);
+  static const Color lightMint = Color(0xFFD6F5E3);
 }
 
 class AppGradients {
