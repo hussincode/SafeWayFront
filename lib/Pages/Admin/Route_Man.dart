@@ -82,37 +82,43 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
         _manageRoutesService.fetchStations(),
       ]);
 
-      final routesData = results[0] as List<dynamic>;
-      final stationsData = results[1] as List<dynamic>;
+      final routesData = results[0];
+      final stationsData = results[1];
 
-      final routes = routesData.map((e) => RouteModel(
-            id: (e['id'] ?? '').toString(),
-            name: (e['name'] ?? '').toString(),
-            busId: (e['busId'] ?? '').toString(),
-            driver: (e['driver'] ?? '').toString(),
-            stops: int.tryParse((e['stops'] ?? '0').toString()) ?? 0,
-            status: (e['status'] ?? '').toString(),
-          )).toList();
+      final routes = routesData
+          .map(
+            (e) => RouteModel(
+              id: (e['id'] ?? '').toString(),
+              name: (e['name'] ?? '').toString(),
+              busId: (e['busId'] ?? '').toString(),
+              driver: (e['driver'] ?? '').toString(),
+              stops: int.tryParse((e['stops'] ?? '0').toString()) ?? 0,
+              status: (e['status'] ?? '').toString(),
+            ),
+          )
+          .toList();
 
-      final stations = stationsData.map((e) => BusStation(
-            id: (e['id'] ?? '').toString(),
-            name: (e['name'] ?? '').toString(),
-            address: (e['address'] ?? '').toString(),
-            students: int.tryParse((e['students'] ?? '0').toString()) ?? 0,
-            scheduledTime: (e['scheduledTime'] ?? '').toString(),
-            routes: (e['routes'] as List<dynamic>? ?? [])
-                .map((x) => x.toString())
-                .toList(),
-          )).toList();
+      final stations = stationsData
+          .map(
+            (e) => BusStation(
+              id: (e['id'] ?? '').toString(),
+              name: (e['name'] ?? '').toString(),
+              address: (e['address'] ?? '').toString(),
+              students: int.tryParse((e['students'] ?? '0').toString()) ?? 0,
+              scheduledTime: (e['scheduledTime'] ?? '').toString(),
+              routes: (e['routes'] as List<dynamic>? ?? [])
+                  .map((x) => x.toString())
+                  .toList(),
+            ),
+          )
+          .toList();
 
       if (!mounted) return;
       setState(() {
-        _allRoutes
-          ..clear();
+        _allRoutes.clear();
         _allRoutes.addAll(routes);
 
-        _stations
-          ..clear();
+        _stations.clear();
         _stations.addAll(stations);
 
         _loading = false;
@@ -127,17 +133,19 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
   }
 
   List<RouteModel> get _filteredRoutes => _allRoutes.where((r) {
-        final q = _searchQuery.toLowerCase();
-        final matchSearch = q.isEmpty ||
-            r.name.toLowerCase().contains(q) ||
-            r.busId.toLowerCase().contains(q) ||
-            r.driver.toLowerCase().contains(q);
+    final q = _searchQuery.toLowerCase();
+    final matchSearch =
+        q.isEmpty ||
+        r.name.toLowerCase().contains(q) ||
+        r.busId.toLowerCase().contains(q) ||
+        r.driver.toLowerCase().contains(q);
 
-        final matchFilter = _filterQuery.isEmpty ||
-            r.name.toLowerCase().contains(_filterQuery.toLowerCase());
+    final matchFilter =
+        _filterQuery.isEmpty ||
+        r.name.toLowerCase().contains(_filterQuery.toLowerCase());
 
-        return matchSearch && matchFilter;
-      }).toList();
+    return matchSearch && matchFilter;
+  }).toList();
 
   // ── COLORS ──
   static const _green = Color(0xFF16A34A);
@@ -163,60 +171,72 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator(color: _green))
             : _error != null
-                ? Center(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.error_outline, color: Colors.red.shade400, size: 48),
-                          const SizedBox(height: 12),
-                          Text(
-                            'Failed to load data',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.red.shade400,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _error!,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontSize: 12, color: Colors.black54),
-                          ),
-                          const SizedBox(height: 14),
-                          ElevatedButton(
-                            onPressed: _loadData,
-                            style: ElevatedButton.styleFrom(backgroundColor: _green),
-                            child: const Text('Retry'),
-                          )
-                        ],
-                      ),
-                    ),
-                  )
-                : Column(
-                    mainAxisSize: MainAxisSize.max,
+            ? Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 24,
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      _buildHeader(filtered.length),
-                      Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          children: [
-                            const SizedBox(height: 16),
-                            _buildActionButtons(),
-                            const SizedBox(height: 16),
-                            _buildSearchAndFilter(),
-                            const SizedBox(height: 16),
-                            _buildRouteRecordsCard(filtered),
-                            const SizedBox(height: 20),
-                            _buildStationsSection(),
-                            const SizedBox(height: 24),
-                          ],
+                      Icon(
+                        Icons.error_outline,
+                        color: Colors.red.shade400,
+                        size: 48,
+                      ),
+                      const SizedBox(height: 12),
+                      Text(
+                        'Failed to load data',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: Colors.red.shade400,
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _error!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Colors.black54,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      ElevatedButton(
+                        onPressed: _loadData,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _green,
+                        ),
+                        child: const Text('Retry'),
                       ),
                     ],
                   ),
+                ),
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.max,
+                children: [
+                  _buildHeader(filtered.length),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      children: [
+                        const SizedBox(height: 16),
+                        _buildActionButtons(),
+                        const SizedBox(height: 16),
+                        _buildSearchAndFilter(),
+                        const SizedBox(height: 16),
+                        _buildRouteRecordsCard(filtered),
+                        const SizedBox(height: 20),
+                        _buildStationsSection(),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -230,7 +250,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
         children: [
           GestureDetector(
             onTap: () => Navigator.maybePop(context),
-            child: const Icon(Icons.arrow_back, color: Colors.black87, size: 22),
+            child: const Icon(
+              Icons.arrow_back,
+              color: Colors.black87,
+              size: 22,
+            ),
           ),
           const SizedBox(width: 12),
           Container(
@@ -274,7 +298,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: Colors.grey.shade300),
             ),
-            child: const Icon(Icons.account_circle_outlined, color: Colors.grey, size: 28),
+            child: const Icon(
+              Icons.account_circle_outlined,
+              color: Colors.grey,
+              size: 28,
+            ),
           ),
         ],
       ),
@@ -293,7 +321,7 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
             color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -307,8 +335,13 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
               foregroundColor: Colors.black87,
               side: BorderSide(color: Colors.grey.shade300),
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -321,8 +354,13 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
               foregroundColor: Colors.white,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              textStyle: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              textStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
@@ -342,7 +380,7 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
             color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -427,7 +465,7 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
             color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -451,7 +489,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
               children: [
                 const Text(
                   'Route Records',
-                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -498,17 +540,27 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Column(
                 children: [
-                  Icon(Icons.search_off_outlined, size: 48, color: Colors.black12),
+                  Icon(
+                    Icons.search_off_outlined,
+                    size: 48,
+                    color: Colors.black12,
+                  ),
                   SizedBox(height: 12),
                   Text(
                     'Search to get info',
-                    style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF), fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Color(0xFF9CA3AF),
+                      fontWeight: FontWeight.w500,
                     ),
+                  ),
                 ],
               ),
             )
           else
-            ...routes.asMap().entries.map((e) => _buildRouteRow(e.value, e.key)),
+            ...routes.asMap().entries.map(
+              (e) => _buildRouteRow(e.value, e.key),
+            ),
         ],
       ),
     );
@@ -536,7 +588,9 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                     width: 36,
                     height: 36,
                     decoration: BoxDecoration(
-                      color: isActive ? _green.withOpacity(0.12) : Colors.grey.withOpacity(0.1),
+                      color: isActive
+                          ? _green.withOpacity(0.12)
+                          : Colors.grey.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(
@@ -562,16 +616,27 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                         const SizedBox(height: 2),
                         Text(
                           route.id,
-                          style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey[500],
+                          ),
                         ),
                         const SizedBox(height: 3),
                         Row(
                           children: [
-                            Icon(Icons.directions_bus_outlined, size: 11, color: Colors.grey[400]),
+                            Icon(
+                              Icons.directions_bus_outlined,
+                              size: 11,
+                              color: Colors.grey[400],
+                            ),
                             const SizedBox(width: 3),
                             Text(
                               route.busId,
-                              style: const TextStyle(fontSize: 11, color: _green, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: _green,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ],
                         ),
@@ -588,19 +653,32 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                 children: [
                   Row(
                     children: [
-                      const Icon(Icons.location_on_outlined, size: 13, color: _green),
+                      const Icon(
+                        Icons.location_on_outlined,
+                        size: 13,
+                        color: _green,
+                      ),
                       const SizedBox(width: 4),
                       Text(
                         '${route.stops} stops',
-                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E)),
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF1A1A2E),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
-                      color: isActive ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+                      color: isActive
+                          ? const Color(0xFFDCFCE7)
+                          : const Color(0xFFF3F4F6),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
@@ -641,7 +719,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.location_on_outlined, color: Colors.white, size: 24),
+              const Icon(
+                Icons.location_on_outlined,
+                color: Colors.white,
+                size: 24,
+              ),
               const SizedBox(width: 12),
               const Expanded(
                 child: Column(
@@ -649,7 +731,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                   children: [
                     Text(
                       'Bus Stations & Stops',
-                      style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Text(
                       'Manage all pickup and drop-off points',
@@ -661,14 +747,21 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
               GestureDetector(
                 onTap: () {},
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: const Text(
                     'View All',
-                    style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),
@@ -712,7 +805,7 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
             color: Colors.black.withOpacity(0.04),
             blurRadius: 8,
             offset: const Offset(0, 2),
-          )
+          ),
         ],
       ),
       child: Column(
@@ -727,7 +820,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                   color: _green.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Icon(Icons.location_on_outlined, color: _green, size: 24),
+                child: const Icon(
+                  Icons.location_on_outlined,
+                  color: _green,
+                  size: 24,
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -736,7 +833,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                   children: [
                     Text(
                       station.name,
-                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A2E),
+                      ),
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -754,10 +855,17 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Students:', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+              Text(
+                'Students:',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
               Text(
                 '${station.students}',
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E)),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                ),
               ),
             ],
           ),
@@ -765,22 +873,35 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Scheduled Time:', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+              Text(
+                'Scheduled Time:',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
               Text(
                 station.scheduledTime,
-                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E)),
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 10),
-          Text('Routes:', style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+          Text(
+            'Routes:',
+            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+          ),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: station.routes.map((r) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: _green.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -788,7 +909,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                 ),
                 child: Text(
                   r,
-                  style: const TextStyle(fontSize: 11, color: _green, fontWeight: FontWeight.w600),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: _green,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               );
             }).toList(),
@@ -799,12 +924,24 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () => _showEditStation(station),
-                  icon: const Icon(Icons.edit_outlined, size: 15, color: _green),
-                  label: const Text('Edit', style: TextStyle(color: _green, fontWeight: FontWeight.w600)),
+                  icon: const Icon(
+                    Icons.edit_outlined,
+                    size: 15,
+                    color: _green,
+                  ),
+                  label: const Text(
+                    'Edit',
+                    style: TextStyle(
+                      color: _green,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: _green.withOpacity(0.3)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     backgroundColor: _green.withOpacity(0.05),
                   ),
                 ),
@@ -814,11 +951,16 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
                 child: OutlinedButton.icon(
                   onPressed: () => _showMapStation(station),
                   icon: const Icon(Icons.map_outlined, size: 15, color: _blue),
-                  label: const Text('Map', style: TextStyle(color: _blue, fontWeight: FontWeight.w600)),
+                  label: const Text(
+                    'Map',
+                    style: TextStyle(color: _blue, fontWeight: FontWeight.w600),
+                  ),
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(color: _blue.withOpacity(0.3)),
                     padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                     backgroundColor: _blue.withOpacity(0.05),
                   ),
                 ),
@@ -871,13 +1013,19 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
 
   void _showEditStation(BusStation station) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Edit ${station.name}'), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text('Edit ${station.name}'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 
   void _showMapStation(BusStation station) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Map for ${station.name}'), behavior: SnackBarBehavior.floating),
+      SnackBar(
+        content: Text('Map for ${station.name}'),
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 }
@@ -896,7 +1044,10 @@ class _RouteDetailsSheet extends StatelessWidget {
     return Container(
       decoration: const BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(24),
+          topRight: Radius.circular(24),
+        ),
       ),
       padding: const EdgeInsets.all(24),
       child: Column(
@@ -905,7 +1056,10 @@ class _RouteDetailsSheet extends StatelessWidget {
           Container(
             width: 40,
             height: 4,
-            decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           const SizedBox(height: 20),
           Container(
@@ -920,19 +1074,29 @@ class _RouteDetailsSheet extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             route.name,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF1A1A2E),
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
             decoration: BoxDecoration(
-              color: isActive ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+              color: isActive
+                  ? const Color(0xFFDCFCE7)
+                  : const Color(0xFFF3F4F6),
               borderRadius: BorderRadius.circular(20),
             ),
             child: Text(
               route.status,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: isActive ? _green : Colors.grey),
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: isActive ? _green : Colors.grey,
+              ),
             ),
           ),
           const SizedBox(height: 20),
@@ -950,7 +1114,9 @@ class _RouteDetailsSheet extends StatelessWidget {
                     foregroundColor: Colors.black87,
                     side: BorderSide(color: Colors.grey.shade300),
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: const Text('Close'),
                 ),
@@ -964,7 +1130,9 @@ class _RouteDetailsSheet extends StatelessWidget {
                     foregroundColor: Colors.white,
                     elevation: 0,
                     padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
                   ),
                   child: const Text('Edit Route'),
                 ),
@@ -985,15 +1153,28 @@ class _RouteDetailsSheet extends StatelessWidget {
           Container(
             width: 36,
             height: 36,
-            decoration: BoxDecoration(color: _green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            decoration: BoxDecoration(
+              color: _green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Icon(icon, color: _green, size: 18),
           ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-              Text(value, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Color(0xFF1A1A2E))),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11, color: Colors.grey),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF1A1A2E),
+                ),
+              ),
             ],
           ),
         ],
@@ -1031,11 +1212,16 @@ class _AddRouteSheetState extends State<_AddRouteSheet> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: const BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
+          borderRadius: BorderRadius.only(
+            topLeft: Radius.circular(24),
+            topRight: Radius.circular(24),
+          ),
         ),
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -1046,13 +1232,20 @@ class _AddRouteSheetState extends State<_AddRouteSheet> {
               child: Container(
                 width: 40,
                 height: 4,
-                decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2)),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
             const SizedBox(height: 16),
             const Text(
               'Add New Route',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1A1A2E),
+              ),
             ),
             const SizedBox(height: 16),
             _field(_nameCtrl, 'Route Name', Icons.alt_route_outlined),
@@ -1069,9 +1262,14 @@ class _AddRouteSheetState extends State<_AddRouteSheet> {
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
                 ),
-                child: const Text('Add Route', style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                child: const Text(
+                  'Add Route',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                ),
               ),
             ),
             const SizedBox(height: 8),
@@ -1093,12 +1291,20 @@ class _AddRouteSheetState extends State<_AddRouteSheet> {
           filled: true,
           fillColor: const Color(0xFFF8F9FF),
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: Colors.grey.shade200)),
-          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: _green)),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: _green),
+          ),
         ),
       ),
     );
   }
 }
-
