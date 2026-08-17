@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:safeway/Constant/Constant_Color.dart';
 import 'package:safeway/services/location_service.dart';
+import 'package:safeway/services/map_service.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:async';
 
@@ -38,6 +39,9 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
   final MapController _mapController = MapController();
   Timer? _refreshTimer;
 
+  MapThemeMode _mapTheme = MapThemeMode.voyager;
+  List<LatLng> _routePoints = [];
+
   LatLng? _busLocation;
   String _eta = 'Loading...';
   double _milesAway = 0;
@@ -50,7 +54,7 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
     super.initState();
     _fetchLocation();
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
+      const Duration(seconds: 15),
       (_) => _fetchLocation(),
     );
   }
@@ -90,7 +94,13 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
         _refreshing = false;
       });
 
-      _mapController.move(newPos, 14.0);
+      MapService.fetchStreetRoute(newPos, widget.myStop).then((pts) {
+        if (mounted) {
+          setState(() {
+            _routePoints = pts;
+          });
+        }
+      });
     } else {
       setState(() {
         _isConnected = false;
@@ -230,6 +240,8 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
   }
 
   Widget _buildMapCard(LatLng busLoc) {
+    final routePts = _routePoints.isEmpty ? [busLoc, widget.myStop] : _routePoints;
+
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
@@ -261,17 +273,24 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
                       ),
                     ),
                     children: [
+                      // CartoDB HD Retina Tiles
                       TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        urlTemplate: MapService.getTileUrl(_mapTheme),
+                        subdomains: MapService.subdomains,
                         userAgentPackageName: 'com.example.safeway',
+                        maxZoom: 19,
                       ),
                       PolylineLayer(
                         polylines: [
                           Polyline(
-                            points: [busLoc, widget.myStop],
+                            points: routePts,
+                            strokeWidth: 7.0,
+                            color: AppColors.accentGreen.withOpacity(0.3),
+                          ),
+                          Polyline(
+                            points: routePts,
                             strokeWidth: 3.5,
-                            color: AppColors.accentGreen.withOpacity(0.7),
+                            color: AppColors.accentGreen,
                           ),
                         ],
                       ),
@@ -279,39 +298,22 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
                         markers: [
                           Marker(
                             point: busLoc,
-                            width: 40,
-                            height: 40,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: AppColors.darkNavy,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: AppColors.darkNavy.withOpacity(0.4),
-                                    blurRadius: 8,
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.directions_bus_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
+                            width: 90,
+                            height: 70,
+                            child: MapService.buildBusMarker(
+                              busCode: widget.busNumber,
+                              isLive: _isConnected,
                             ),
                           ),
                           Marker(
                             point: widget.myStop,
-                            width: 26,
-                            height: 26,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: Colors.white,
-                                border: Border.all(
-                                  color: AppColors.accentGreen,
-                                  width: 3,
-                                ),
-                              ),
+                            width: 90,
+                            height: 70,
+                            child: MapService.buildStudentMarker(
+                              label: widget.pickupStopName.isNotEmpty
+                                  ? widget.pickupStopName
+                                  : widget.stopName,
+                              isLive: true,
                             ),
                           ),
                         ],
@@ -332,6 +334,45 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
                 ),
                 Positioned(
                   right: 10,
+                  top: 10,
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (_mapTheme == MapThemeMode.voyager) {
+                          _mapTheme = MapThemeMode.light;
+                        } else if (_mapTheme == MapThemeMode.light) {
+                          _mapTheme = MapThemeMode.dark;
+                        } else {
+                          _mapTheme = MapThemeMode.voyager;
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 6,
+                          )
+                        ],
+                      ),
+                      child: Icon(
+                        _mapTheme == MapThemeMode.dark
+                            ? Icons.dark_mode
+                            : (_mapTheme == MapThemeMode.light
+                                ? Icons.light_mode
+                                : Icons.map_rounded),
+                        size: 18,
+                        color: AppColors.darkNavy,
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: 52,
                   top: 10,
                   child: Container(
                     padding: const EdgeInsets.symmetric(

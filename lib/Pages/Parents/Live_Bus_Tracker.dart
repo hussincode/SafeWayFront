@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:safeway/services/api_config.dart';
+import 'package:safeway/services/map_service.dart';
 
 class LiveBusTrackingScreen extends StatefulWidget {
   const LiveBusTrackingScreen({super.key});
@@ -15,6 +16,10 @@ class LiveBusTrackingScreen extends StatefulWidget {
 
 class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
   final MapController _mapController = MapController();
+
+  // ── Map Theme ──
+  MapThemeMode _mapTheme = MapThemeMode.voyager;
+  List<LatLng> _routePoints = [];
 
   // ── Locations ──
   LatLng _busLocation     = const LatLng(30.0444, 31.2357); // Cairo default
@@ -72,6 +77,16 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
       _fetchStudentLocation(),
     ]);
     _calculateETA();
+    _updateRoute();
+  }
+
+  Future<void> _updateRoute() async {
+    final pts = await MapService.fetchStreetRoute(_busLocation, _studentLocation);
+    if (mounted) {
+      setState(() {
+        _routePoints = pts;
+      });
+    }
   }
 
   Future<void> _fetchBusLocation() async {
@@ -227,6 +242,8 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
 
   // ── MAP ──
   Widget _buildMap() {
+    final routePts = _routePoints.isEmpty ? [_busLocation, _studentLocation] : _routePoints;
+
     return Stack(
       children: [
         FlutterMap(
@@ -237,66 +254,52 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
             interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
           ),
           children: [
-            // ✅ Thunderforest Transport — better than OpenStreetMap
+            // ✅ CartoDB HD Retina Tiles (Free, No API Key needed)
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              urlTemplate: MapService.getTileUrl(_mapTheme),
+              subdomains: MapService.subdomains,
               userAgentPackageName: 'com.example.safeway',
+              maxZoom: 19,
             ),
 
-            // Route line between bus and student
+            // Route line along actual streets
             PolylineLayer(polylines: [
+              // Outer glow line
               Polyline(
-                points: [_busLocation, _studentLocation],
-                color: const Color(0xFF4F46E5).withOpacity(0.7),
-                strokeWidth: 4,
+                points: routePts,
+                color: const Color(0xFF6366F1).withOpacity(0.3),
+                strokeWidth: 8.0,
+              ),
+              // Main road polyline
+              Polyline(
+                points: routePts,
+                color: const Color(0xFF4F46E5),
+                strokeWidth: 4.0,
               ),
             ]),
 
-            // Markers
+            // Custom Markers
             MarkerLayer(markers: [
-
               // 🚌 Bus Marker
               Marker(
                 point: _busLocation,
-                width: 100, height: 52,
-                child: Column(children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: _busConnected ? const Color(0xFF4F46E5) : Colors.grey,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [BoxShadow(
-                        color: const Color(0xFF4F46E5).withOpacity(0.5),
-                        blurRadius: 8,
-                      )],
-                    ),
-                    child: const Text('BUS-101',
-                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                  const Icon(Icons.navigation, color: Colors.red, size: 22),
-                ]),
+                width: 90,
+                height: 70,
+                child: MapService.buildBusMarker(
+                  busCode: 'BUS-101',
+                  isLive: _busConnected,
+                ),
               ),
 
               // 🎒 Student Marker
               Marker(
                 point: _studentLocation,
-                width: 100, height: 52,
-                child: Column(children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: _studentConnected ? const Color(0xFF16A34A) : Colors.grey,
-                      borderRadius: BorderRadius.circular(10),
-                      boxShadow: [BoxShadow(
-                        color: const Color(0xFF16A34A).withOpacity(0.5),
-                        blurRadius: 8,
-                      )],
-                    ),
-                    child: const Text('Student',
-                        style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold)),
-                  ),
-                  const Icon(Icons.location_on, color: Color(0xFF16A34A), size: 22),
-                ]),
+                width: 90,
+                height: 70,
+                child: MapService.buildStudentMarker(
+                  label: 'Student',
+                  isLive: _studentConnected,
+                ),
               ),
             ]),
           ],
@@ -309,30 +312,66 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             decoration: BoxDecoration(
               color: const Color(0xFF4F46E5),
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8)],
             ),
-            child: Column(children: [
-              const Text('Estimated Arrival', style: TextStyle(color: Colors.white70, fontSize: 10)),
-              Text(_eta, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
-            ]),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                const Text('Estimated Arrival', style: TextStyle(color: Colors.white70, fontSize: 10)),
+                Text(_eta, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
           ),
         ),
 
-        // ── Fit both markers button ──
+        // ── Map controls top left (Fit Screen + Theme Switcher) ──
         Positioned(
           top: 16, left: 16,
-          child: GestureDetector(
-            onTap: _fitBothMarkers,
-            child: Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 6)],
+          child: Row(
+            children: [
+              GestureDetector(
+                onTap: _fitBothMarkers,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6)],
+                  ),
+                  child: const Icon(Icons.fit_screen, color: Color(0xFF4F46E5), size: 20),
+                ),
               ),
-              child: const Icon(Icons.fit_screen, color: Color(0xFF4F46E5), size: 20),
-            ),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () {
+                  setState(() {
+                    if (_mapTheme == MapThemeMode.voyager) {
+                      _mapTheme = MapThemeMode.light;
+                    } else if (_mapTheme == MapThemeMode.light) {
+                      _mapTheme = MapThemeMode.dark;
+                    } else {
+                      _mapTheme = MapThemeMode.voyager;
+                    }
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(10),
+                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6)],
+                  ),
+                  child: Icon(
+                    _mapTheme == MapThemeMode.dark
+                        ? Icons.dark_mode
+                        : (_mapTheme == MapThemeMode.light ? Icons.light_mode : Icons.map_rounded),
+                    color: const Color(0xFF4F46E5),
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 

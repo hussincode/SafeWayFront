@@ -23,7 +23,7 @@ static Future<void> startStudentSharing() async {
   _isSharing = true;
   await _sendStudentLocation();
 
-  _timer = Timer.periodic(const Duration(seconds: 5), (_) async {
+  _timer = Timer.periodic(const Duration(seconds: 15), (_) async {
     await _sendStudentLocation();
   });
 }

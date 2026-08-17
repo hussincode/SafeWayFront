@@ -260,7 +260,7 @@ class _AlertsPageState extends State<AlertsPage> {
                           color: AppColors.accentGreen,
                           child: ListView.separated(
                             itemCount: _notifications.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(height: 14),
                             itemBuilder: (context, index) {
                               final item = _notifications[index];

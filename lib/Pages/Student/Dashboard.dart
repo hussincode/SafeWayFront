@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:safeway/services/api_config.dart';
 import 'package:safeway/services/location_service.dart';
+import 'package:safeway/services/map_service.dart';
 import 'package:safeway/Pages/Student/change_pickup_station_screen.dart';
 import 'package:safeway/Pages/login_page.dart';
 import 'package:safeway/Pages/Student/Request_Route_Change.dart';
@@ -93,6 +94,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   // ── Bus tracking ──
   LatLng _busLocation = const LatLng(24.7136, 46.6753);
   final LatLng _myStop = const LatLng(24.7200, 46.6800);
+  List<LatLng> _routePoints = [];
   String _eta = 'Loading...';
   bool _isConnected = false;
   Timer? _refreshTimer;
@@ -144,7 +146,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     _fetchBusLocation();
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5),
+      const Duration(seconds: 15),
       (_) => _fetchBusLocation(),
     );
   }
@@ -212,7 +214,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         _isConnected = true;
       });
 
-      _mapController.move(_busLocation, 14.0);
+      MapService.fetchStreetRoute(newPos, _myStop).then((pts) {
+        if (mounted) {
+          setState(() {
+            _routePoints = pts;
+          });
+        }
+      });
     } else {
       if (mounted) setState(() => _isConnected = false);
     }
@@ -319,7 +327,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(height: 24),
               _sectionLabel('YOUR NEXT TRIP'),
               const SizedBox(height: 8),
-              _buildNextTripCard(),
+              _buildLiveTrackerCard(),
               const SizedBox(height: 28),
               _sectionLabel('YOUR ROUTE'),
               const SizedBox(height: 4),
@@ -557,10 +565,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   // ── NEXT TRIP CARD ──
-  Widget _buildNextTripCard() {
+  Widget _buildLiveTrackerCard() {
     final routeName = _studentInfo?.routeName ?? 'Loading...';
     final busNumber = _studentInfo?.busNumber ?? '...';
     final stopName = _studentInfo?.stopName ?? '...';
+    final routePts = _routePoints.isEmpty ? [_busLocation, _myStop] : _routePoints;
 
     final String badgeText = !_isConnected
         ? 'OFFLINE'
@@ -675,16 +684,22 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate:
-                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        urlTemplate: MapService.cartoVoyager,
+                        subdomains: MapService.subdomains,
                         userAgentPackageName: 'com.example.safeway',
+                        maxZoom: 19,
                       ),
                       PolylineLayer(
                         polylines: [
                           Polyline(
-                            points: [_busLocation, _myStop],
+                            points: routePts,
+                            strokeWidth: 7.0,
+                            color: _Palette.green.withOpacity(0.3),
+                          ),
+                          Polyline(
+                            points: routePts,
                             strokeWidth: 3.5,
-                            color: _Palette.green.withOpacity(0.7),
+                            color: _Palette.green,
                           ),
                         ],
                       ),
@@ -692,34 +707,20 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         markers: [
                           Marker(
                             point: _busLocation,
-                            width: 40,
-                            height: 40,
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: _Palette.dark,
-                                shape: BoxShape.circle,
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: _Palette.dark.withOpacity(0.4),
-                                    blurRadius: 8,
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(
-                                Icons.directions_bus_rounded,
-                                color: Colors.white,
-                                size: 20,
-                              ),
+                            width: 90,
+                            height: 70,
+                            child: MapService.buildBusMarker(
+                              busCode: 'BUS',
+                              isLive: _isConnected,
                             ),
                           ),
                           Marker(
                             point: _myStop,
-                            width: 26,
-                            height: 26,
-                            child: const Icon(
-                              Icons.location_on,
-                              color: _Palette.green,
-                              size: 26,
+                            width: 90,
+                            height: 70,
+                            child: MapService.buildStudentMarker(
+                              label: 'Stop',
+                              isLive: true,
                             ),
                           ),
                         ],
