@@ -240,7 +240,9 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
   }
 
   Widget _buildMapCard(LatLng busLoc) {
-    final routePts = _routePoints.isEmpty ? [busLoc, widget.myStop] : _routePoints;
+    final routePts = _routePoints.isEmpty
+        ? [busLoc, widget.myStop]
+        : _routePoints;
 
     return Container(
       padding: const EdgeInsets.all(10),
@@ -312,7 +314,7 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
                             child: MapService.buildStudentMarker(
                               label: widget.pickupStopName.isNotEmpty
                                   ? widget.pickupStopName
-                                  : widget.stopName,
+                                  : widget.pickupStopName,
                               isLive: true,
                             ),
                           ),
@@ -356,15 +358,15 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
                           BoxShadow(
                             color: Colors.black.withOpacity(0.08),
                             blurRadius: 6,
-                          )
+                          ),
                         ],
                       ),
                       child: Icon(
                         _mapTheme == MapThemeMode.dark
                             ? Icons.dark_mode
                             : (_mapTheme == MapThemeMode.light
-                                ? Icons.light_mode
-                                : Icons.map_rounded),
+                                  ? Icons.light_mode
+                                  : Icons.map_rounded),
                         size: 18,
                         color: AppColors.darkNavy,
                       ),

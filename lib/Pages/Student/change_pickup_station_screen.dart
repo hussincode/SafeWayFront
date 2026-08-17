@@ -2,8 +2,27 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:safeway/Constant/Constant_Color.dart';
 import 'package:safeway/services/api_config.dart';
 
+// ── Models ──────────────────────────────────────────────────────────────────
+class StationModel {
+  final int id;
+  final String name;
+  StationModel({required this.id, required this.name});
+  factory StationModel.fromJson(Map<String, dynamic> j) =>
+      StationModel(id: j['id'], name: j['name']);
+}
+
+class RouteModel {
+  final int id;
+  final String name;
+  RouteModel({required this.id, required this.name});
+  factory RouteModel.fromJson(Map<String, dynamic> j) =>
+      RouteModel(id: j['id'], name: j['name']);
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────────
 class ChangePickupStationScreen extends StatefulWidget {
   const ChangePickupStationScreen({super.key});
 
@@ -12,429 +31,559 @@ class ChangePickupStationScreen extends StatefulWidget {
       _ChangePickupStationScreenState();
 }
 
-class _ChangePickupStationScreenState
-    extends State<ChangePickupStationScreen> {
-  String get baseUrl => apiBaseUrl;
+class _ChangePickupStationScreenState extends State<ChangePickupStationScreen> {
   final _storage = const FlutterSecureStorage();
+  final TextEditingController _reasonController = TextEditingController();
 
-  // ── State ──
-  List<Map<String, dynamic>> _stations = [];
-  int?    _selectedStationId;
-  String? _selectedStationName;
+  // data
+  List<StationModel> _stations = [];
+  List<RouteModel> _routes = [];
+  StationModel? _selectedStation;
+  RouteModel? _selectedRoute;
   DateTime? _selectedDate;
-  bool _isLoading    = true;
-  bool _isSubmitting = false;
-  int  _userId       = 0;
+
+  // ui state
+  bool _loadingData = true;
+  bool _submitting = false;
+  String? _errorMessage;
+  int _userId = 0;
+  String _currentPickup = 'Imperial Park';
+
+  bool get _canSubmit =>
+      _selectedStation != null && _selectedDate != null && !_submitting;
 
   @override
   void initState() {
     super.initState();
-    _init();
+    _loadData();
   }
 
-  Future<void> _init() async {
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  // ── Load userId + stations + routes in parallel ──────────────────────────
+  Future<void> _loadData() async {
     final userIdStr = await _storage.read(key: 'userId') ?? '0';
     _userId = int.tryParse(userIdStr) ?? 0;
-    await _loadStations();
-  }
 
-  // ── Load stations from API ──
-Future<void> _loadStations() async {
-  try {
-    print('📡 Fetching stations...');
-    final res = await http.get(
-      Uri.parse('$baseUrl/api/station/list'),
-    );
-    print('📡 Status: ${res.statusCode}');
-    print('📡 Body: ${res.body}');
+    try {
+      final results = await Future.wait([
+        http.get(Uri.parse('$apiBaseUrl/api/routechangerequests/stations')),
+        http.get(Uri.parse('$apiBaseUrl/api/routechangerequests/routes')),
+        if (_userId != 0)
+          http.get(Uri.parse('$apiBaseUrl/api/auth/student-info/$_userId')),
+      ]);
 
-    if (res.statusCode == 200) {
-      final List data = jsonDecode(res.body);
-      print('📡 Stations count: ${data.length}');
-      setState(() {
-        _stations = data.cast<Map<String, dynamic>>();
-        _isLoading = false;
-      });
-    } else {
-      print('❌ Error: ${res.statusCode}');
-      setState(() => _isLoading = false);
+      if (!mounted) return;
+
+      final stationsRes = results[0];
+      final routesRes = results[1];
+
+      if (results.length > 2 && results[2].statusCode == 200) {
+        final infoData = jsonDecode(results[2].body);
+        final curStop = infoData['stopName'] ?? '';
+        if (curStop.toString().isNotEmpty) {
+          _currentPickup = curStop.toString();
+        }
+      }
+
+      if (stationsRes.statusCode == 200 && routesRes.statusCode == 200) {
+        final stationsData = jsonDecode(stationsRes.body) as List;
+        final routesData = jsonDecode(routesRes.body) as List;
+        setState(() {
+          _stations = stationsData
+              .map((e) => StationModel.fromJson(e))
+              .toList();
+          _routes = routesData.map((e) => RouteModel.fromJson(e)).toList();
+          _loadingData = false;
+        });
+      } else {
+        setState(() {
+          _errorMessage = 'Failed to load data from server.';
+          _loadingData = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Network error. Check your connection.';
+          _loadingData = false;
+        });
+      }
     }
-  } catch (e) {
-    print('❌ Exception: $e');
-    setState(() => _isLoading = false);
   }
-}
 
-  // ── Pick date ──
+  // ── Submit ────────────────────────────────────────────────────────────────
+  Future<void> _submit() async {
+    if (!_canSubmit) return;
+    setState(() {
+      _submitting = true;
+      _errorMessage = null;
+    });
+
+    final routeId =
+        _selectedRoute?.id ?? (_routes.isNotEmpty ? _routes.first.id : 1);
+
+    try {
+      final res = await http.post(
+        Uri.parse('$apiBaseUrl/api/routechangerequests'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'userId': _userId,
+          'newStationId': _selectedStation!.id,
+          'newRouteId': routeId,
+          'effectiveDate': _selectedDate!.toIso8601String(),
+          'reason': _reasonController.text.trim(),
+        }),
+      );
+
+      if (!mounted) return;
+
+      if (res.statusCode == 200) {
+        _showSuccessDialog();
+      } else {
+        setState(() {
+          _errorMessage =
+              jsonDecode(res.body)['message'] ?? 'Submission failed.';
+        });
+      }
+    } catch (_) {
+      if (mounted)
+        setState(() => _errorMessage = 'Network error. Please try again.');
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  // ── Date picker ───────────────────────────────────────────────────────────
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
       initialDate: DateTime.now().add(const Duration(days: 1)),
       firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 90)),
-      builder: (context, child) {
-        return Theme(
-          data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.light(
-              primary: Color(0xFF4F46E5),
-              onPrimary: Colors.white,
-            ),
+      lastDate: DateTime.now().add(const Duration(days: 60)),
+      builder: (ctx, child) => Theme(
+        data: Theme.of(ctx).copyWith(
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.accentGreen,
+            onPrimary: Colors.white,
+            onSurface: AppColors.textPrimary,
           ),
-          child: child!,
-        );
-      },
+        ),
+        child: child!,
+      ),
     );
     if (picked != null) setState(() => _selectedDate = picked);
   }
 
-  // ── Submit request ──
-  Future<void> _submitRequest() async {
-    if (_selectedStationId == null) return;
-
-    setState(() => _isSubmitting = true);
-
-    try {
-      final body = {
-        'userId':       _userId,
-        'newStationId': _selectedStationId,
-        if (_selectedDate != null)
-          'effectiveDate': _selectedDate!.toIso8601String(),
-      };
-
-      final res = await http.post(
-        Uri.parse('$baseUrl/api/station/request'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
-
-      if (!mounted) return;
-      setState(() => _isSubmitting = false);
-
-      final data = jsonDecode(res.body);
-
-      if (res.statusCode == 200) {
-        _showSuccessDialog();
-      } else {
-        _showErrorSnackbar(data['message'] ?? 'Something went wrong.');
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isSubmitting = false);
-        _showErrorSnackbar('Cannot connect to server.');
-      }
-    }
-  }
-
+  // ── Success dialog ────────────────────────────────────────────────────────
   void _showSuccessDialog() {
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (_) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        backgroundColor: Colors.white,
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 64, height: 64,
+              padding: const EdgeInsets.all(16),
               decoration: const BoxDecoration(
-                color: Color(0xFFF0FFF4), shape: BoxShape.circle,
+                color: AppColors.badgeBg,
+                shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.check_circle_outline,
-                  color: Color(0xFF16A34A), size: 36),
+              child: const Icon(
+                Icons.check_circle_rounded,
+                color: AppColors.accentGreen,
+                size: 40,
+              ),
             ),
             const SizedBox(height: 16),
-            const Text('Request Submitted!',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
-            const SizedBox(height: 8),
             const Text(
-              'Your request will be reviewed by the school administration. You\'ll receive a notification once it\'s approved.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+              'Request Submitted!',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
-            const SizedBox(height: 20),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pop(context); // close dialog
-                  Navigator.pop(context); // go back
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF4F46E5),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                ),
-                child: const Text('Done', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(
+              'Your request to change pickup station to "${_selectedStation!.name}" '
+              'effective ${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year} '
+              'has been submitted for approval.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+                height: 1.5,
               ),
             ),
           ],
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pop(); // close dialog
+                Navigator.of(context).pop(); // back to dashboard
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.accentGreen,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+              child: const Text(
+                'Done',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Build ─────────────────────────────────────────────────────────────────
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF4F6F6),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTopHeader(),
+              const SizedBox(height: 24),
+              _buildFormCard(),
+              const SizedBox(height: 24),
+              _buildSubmitButton(),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  void _showErrorSnackbar(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+  // ── Header Widget ────────────────────────────────────────────────────────
+  Widget _buildTopHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        GestureDetector(
+          onTap: () => Navigator.of(context).pop(),
+          child: Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.arrow_back,
+              color: AppColors.darkNavy,
+              size: 20,
+            ),
+          ),
+        ),
+        const SizedBox(height: 18),
+        const Text(
+          'STUDENT REQUEST',
+          style: TextStyle(
+            fontSize: 11,
+            letterSpacing: 1.1,
+            fontWeight: FontWeight.w700,
+            color: AppColors.accentGreen,
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Change pickup station',
+          style: TextStyle(
+            fontSize: 26,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Text(
+          'Choose the option that works best for your school day.',
+          style: TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary,
+            height: 1.4,
+          ),
+        ),
+      ],
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFEEF2FF),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            children: [
-              const SizedBox(height: 20),
-
-              // ── Bus icon ──
-              Container(
-                width: 72, height: 72,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFBBF24),
-                  shape: BoxShape.circle,
+  // ── Form Card Widget ─────────────────────────────────────────────────────
+  Widget _buildFormCard() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(
+          0xFFFAF7F2,
+        ), // Soft warm off-white container matching screenshot
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: _loadingData
+          ? const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Column(
+                children: [
+                  CircularProgressIndicator(color: AppColors.accentGreen),
+                  SizedBox(height: 16),
+                  Text(
+                    'Loading options...',
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildSectionLabel('CURRENT PICKUP'),
+                const SizedBox(height: 8),
+                _buildCurrentPickupBadge(),
+                const SizedBox(height: 20),
+                _buildSectionLabel('AVAILABLE OPTIONS'),
+                const SizedBox(height: 8),
+                _buildDropdown<StationModel>(
+                  hint: 'Select Station',
+                  value: _selectedStation,
+                  items: _stations,
+                  itemLabel: (s) => s.name,
+                  onChanged: (val) => setState(() => _selectedStation = val),
                 ),
-                child: const Icon(Icons.directions_bus_rounded,
-                    color: Color(0xFF1A1A2E), size: 36),
-              ),
-              const SizedBox(height: 20),
+                const SizedBox(height: 20),
+                _buildSectionLabel('Effective Date'),
+                const SizedBox(height: 8),
+                _buildDateField(),
+                const SizedBox(height: 20),
+                _buildSectionLabel('REASON (OPTIONAL)'),
+                const SizedBox(height: 8),
+                _buildReasonField(),
+                if (_errorMessage != null) ...[
+                  const SizedBox(height: 16),
+                  _buildErrorBanner(),
+                ],
+              ],
+            ),
+    );
+  }
 
-              // ── Title ──
-              const Text(
-                'Change Pick-up Station',
-                style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A2E)),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Select your new pick-up station and date, then submit your request.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
-              ),
-              const SizedBox(height: 28),
+  // ── UI Components ────────────────────────────────────────────────────────
+  Widget _buildSectionLabel(String label) {
+    return Text(
+      label,
+      style: const TextStyle(
+        fontSize: 11,
+        letterSpacing: 0.8,
+        fontWeight: FontWeight.w700,
+        color: AppColors.textSecondary,
+      ),
+    );
+  }
 
-              // ── White card ──
-              Container(
-                padding: const EdgeInsets.all(20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                        color: Colors.black.withOpacity(0.06),
-                        blurRadius: 12,
-                        offset: const Offset(0, 4)),
-                  ],
+  Widget _buildCurrentPickupBadge() {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8EFEC),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            Icons.location_on_outlined,
+            color: AppColors.accentGreen,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              _currentPickup,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdown<T>({
+    required String hint,
+    required T? value,
+    required List<T> items,
+    required String Function(T) itemLabel,
+    required ValueChanged<T?> onChanged,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<T>(
+          value: value,
+          isExpanded: true,
+          hint: Text(
+            hint,
+            style: const TextStyle(fontSize: 14.5, color: AppColors.textMuted),
+          ),
+          icon: const Icon(
+            Icons.keyboard_arrow_down_rounded,
+            color: AppColors.textPrimary,
+          ),
+          style: const TextStyle(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textPrimary,
+          ),
+          items: items
+              .map(
+                (item) => DropdownMenuItem<T>(
+                  value: item,
+                  child: Text(itemLabel(item)),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              )
+              .toList(),
+          onChanged: onChanged,
+        ),
+      ),
+    );
+  }
 
-                    // ── Station dropdown ──
-                    Row(
-                      children: const [
-                        Icon(Icons.location_on_outlined,
-                            color: Color(0xFF4F46E5), size: 18),
-                        SizedBox(width: 6),
-                        Text('New Pick-up Station',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1A1A2E))),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    _isLoading
-                        ? Container(
-                            height: 52,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Center(
-                              child: SizedBox(
-                                  width: 18, height: 18,
-                                  child: CircularProgressIndicator(strokeWidth: 2)),
-                            ),
-                          )
-                        : Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF3F4F6),
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(color: const Color(0xFFE5E7EB)),
-                            ),
-                            child: DropdownButtonHideUnderline(
-                              child: DropdownButton<int>(
-                                isExpanded: true,
-                                value: _selectedStationId,
-                                hint: const Text('Select a station',
-                                    style: TextStyle(color: Color(0xFF9CA3AF), fontSize: 14)),
-                                icon: const Icon(Icons.keyboard_arrow_down,
-                                    color: Color(0xFF6B7280)),
-                                items: _stations.map((s) {
-                                  return DropdownMenuItem<int>(
-                                    value: s['id'] as int,
-                                    child: Text(s['name'] as String,
-                                        style: const TextStyle(
-                                            fontSize: 14, color: Color(0xFF1A1A2E))),
-                                  );
-                                }).toList(),
-                                onChanged: (val) {
-                                  setState(() {
-                                    _selectedStationId   = val;
-                                    _selectedStationName = _stations
-                                        .firstWhere((s) => s['id'] == val)['name'];
-                                  });
-                                },
-                              ),
-                            ),
-                          ),
-                    const SizedBox(height: 20),
-
-                    // ── Date picker ──
-                    Row(
-                      children: const [
-                        Icon(Icons.calendar_today_outlined,
-                            color: Color(0xFF4F46E5), size: 18),
-                        SizedBox(width: 6),
-                        Text('Effective Date (Optional)',
-                            style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF1A1A2E))),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: _pickDate,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F4F6),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: const Color(0xFFE5E7EB)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.calendar_month_outlined,
-                                color: Color(0xFF4F46E5), size: 18),
-                            const SizedBox(width: 10),
-                            Text(
-                              _selectedDate == null
-                                  ? 'Pick a date'
-                                  : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: _selectedDate == null
-                                    ? const Color(0xFF9CA3AF)
-                                    : const Color(0xFF1A1A2E),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // ── Info box ──
-                    Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFEFF6FF),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFBFDBFE)),
-                      ),
-                      child: const Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('💡', style: TextStyle(fontSize: 16)),
-                          SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Your request will be reviewed by the school administration. You\'ll receive a notification once it\'s approved.',
-                              style: TextStyle(
-                                  fontSize: 13, color: Color(0xFF1D4ED8)),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // ── Request Change button ──
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        onPressed: _selectedStationId == null || _isSubmitting
-                            ? null
-                            : _submitRequest,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF4F46E5),
-                          disabledBackgroundColor: const Color(0xFFE5E7EB),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        child: _isSubmitting
-                            ? const SizedBox(
-                                width: 20, height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Colors.white),
-                              )
-                            : Text(
-                                'Request Change',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: _selectedStationId == null
-                                      ? const Color(0xFF9CA3AF)
-                                      : Colors.white,
-                                ),
-                              ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // ── Cancel button ──
-                    SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.pop(context),
-                        style: OutlinedButton.styleFrom(
-                          side: const BorderSide(color: Color(0xFFE5E7EB)),
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                        ),
-                        child: const Text('Cancel',
-                            style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF374151))),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ── Footer ──
-              const Text(
-                'Need help? Contact the school office at (555) 123-4567',
-                style: TextStyle(fontSize: 12, color: Color(0xFF9CA3AF)),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 20),
-            ],
+  Widget _buildDateField() {
+    return GestureDetector(
+      onTap: _pickDate,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Text(
+          _selectedDate == null
+              ? 'Pick up Date'
+              : '${_selectedDate!.day}/${_selectedDate!.month}/${_selectedDate!.year}',
+          style: TextStyle(
+            fontSize: 14.5,
+            fontWeight: _selectedDate == null
+                ? FontWeight.normal
+                : FontWeight.w600,
+            color: _selectedDate == null
+                ? AppColors.textMuted
+                : AppColors.textPrimary,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildReasonField() {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: TextField(
+        controller: _reasonController,
+        maxLines: 3,
+        style: const TextStyle(fontSize: 14.5, color: AppColors.textPrimary),
+        decoration: const InputDecoration(
+          hintText: 'Tell us a little more...',
+          hintStyle: TextStyle(fontSize: 14.5, color: AppColors.textMuted),
+          border: InputBorder.none,
+          isDense: true,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEE2E2),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.red, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              _errorMessage!,
+              style: const TextStyle(fontSize: 12.5, color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSubmitButton() {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: _canSubmit ? _submit : null,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.darkNavy,
+          disabledBackgroundColor: AppColors.darkNavy.withOpacity(0.4),
+          foregroundColor: Colors.white,
+          elevation: 0,
+          padding: const EdgeInsets.symmetric(vertical: 18),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(24),
+          ),
+        ),
+        child: _submitting
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.white,
+                ),
+              )
+            : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    'Submit request',
+                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(Icons.arrow_forward_rounded, size: 18),
+                ],
+              ),
       ),
     );
   }

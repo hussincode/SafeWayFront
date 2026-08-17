@@ -282,8 +282,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    if (_selectedTab == 1) {
-      return TrackBusScreen(
+    final List<Widget> pages = [
+      _buildHomeContent(),
+      TrackBusScreen(
         busNumber: 'Bus #${_studentInfo?.busNumber ?? '101'}',
         routeName: _studentInfo?.routeName ?? 'Morning Route',
         myStop: _myStop,
@@ -291,19 +292,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         pickupTime: '7:40 AM',
         arrivalStopName: 'Main Campus',
         arrivalTime: '8:15 AM',
-        bottomNavigationBar: _buildBottomNav(),
-      );
-    }
-
-    if (_selectedTab == 2) {
-      return AlertsPage(
-        showBottomNav: true,
-        bottomNavigationBar: _buildBottomNav(),
-      );
-    }
-
-    if (_selectedTab == 3) {
-      return ProfilePage(
+        bottomNavigationBar: null,
+      ),
+      const AlertsPage(
+        showBottomNav: false,
+      ),
+      ProfilePage(
         fullName: _studentInfo?.fullName ?? '',
         uniqueID: _studentInfo?.uniqueID ?? '',
         grade: _studentInfo?.grade ?? '',
@@ -311,71 +305,78 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         routeName: _studentInfo?.routeName ?? '',
         stopName: _studentInfo?.stopName ?? '',
         onLogout: _logout,
-        bottomNavigationBar: _buildBottomNav(),
-      );
-    }
+        bottomNavigationBar: null,
+      ),
+    ];
 
     return Scaffold(
       backgroundColor: _Palette.bg,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildHeader(),
-              const SizedBox(height: 24),
-              _sectionLabel('YOUR NEXT TRIP'),
-              const SizedBox(height: 8),
-              _buildLiveTrackerCard(),
-              const SizedBox(height: 28),
-              _sectionLabel('YOUR ROUTE'),
-              const SizedBox(height: 4),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    "Today's stops",
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: _Palette.textPrimary,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () {}, // TODO: full stop list screen
-                    child: const Text(
-                      'See all',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: _Palette.green,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              _buildStopsCard(),
-              const SizedBox(height: 28),
-              _sectionLabel('QUICK ACTIONS'),
-              const SizedBox(height: 4),
-              const Text(
-                'Make a request',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: _Palette.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 12),
-              _buildQuickActions(),
-              const SizedBox(height: 100), // room above the floating nav bar
-            ],
-          ),
-        ),
+      body: IndexedStack(
+        index: _selectedTab,
+        children: pages,
       ),
       bottomNavigationBar: _buildBottomNav(),
+    );
+  }
+
+  Widget _buildHomeContent() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 24),
+            _sectionLabel('YOUR NEXT TRIP'),
+            const SizedBox(height: 8),
+            _buildLiveTrackerCard(),
+            const SizedBox(height: 28),
+            _sectionLabel('YOUR ROUTE'),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Today's stops",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: _Palette.textPrimary,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {}, // TODO: full stop list screen
+                  child: const Text(
+                    'See all',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _Palette.green,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            _buildStopsCard(),
+            const SizedBox(height: 28),
+            _sectionLabel('QUICK ACTIONS'),
+            const SizedBox(height: 4),
+            const Text(
+              'Make a request',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: _Palette.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildQuickActions(),
+            const SizedBox(height: 100), // room above the floating nav bar
+          ],
+        ),
+      ),
     );
   }
 
@@ -1129,66 +1130,87 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  // ── BOTTOM NAV ──
+  // ── BOTTOM NAV (Matches mockup style) ──
   Widget _buildBottomNav() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(36),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 16,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
-          _navItem(0, Icons.home_rounded, 'Home'),
-          _navItem(1, Icons.navigation_outlined, 'Track'),
-          _navItem(2, Icons.notifications_none_rounded, 'Alerts'),
-          _navItem(3, Icons.person_outline_rounded, 'Profile'),
+          _navItem(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
+          _navItem(1, Icons.near_me_outlined, Icons.near_me, 'Track'),
+          _navItem(2, Icons.notifications_none_rounded, Icons.notifications_rounded, 'Alerts'),
+          _navItem(3, Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
         ],
       ),
     );
   }
 
-  Widget _navItem(int index, IconData icon, String label) {
+  Widget _navItem(int index, IconData icon, IconData activeIcon, String label) {
     final bool active = _selectedTab == index;
     return GestureDetector(
       onTap: () {
         setState(() => _selectedTab = index);
       },
       behavior: HitTestBehavior.opaque,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: active ? _Palette.greenBg : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: active ? _Palette.green : _Palette.textMuted,
-            ),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.fastOutSlowIn,
+        padding: active
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+            : const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: active ? const Color(0xFFC7EBD9) : const Color(0xFFF5F6F8),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.fastLinearToSlowEaseIn,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 350),
+                switchInCurve: Curves.easeOutBack,
+                switchOutCurve: Curves.easeInBack,
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: ScaleTransition(scale: anim, child: child),
+                ),
+                child: Icon(
+                  active ? activeIcon : icon,
+                  key: ValueKey(active ? activeIcon : icon),
+                  size: 22,
+                  color: _Palette.green,
+                ),
+              ),
+              if (active) ...[
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.bold,
+                    color: _Palette.green,
+                  ),
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 3),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: active ? _Palette.green : _Palette.textMuted,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
