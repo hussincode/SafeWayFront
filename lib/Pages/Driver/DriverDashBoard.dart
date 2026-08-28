@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:safeway/Pages/Login_page.dart';
 import 'package:safeway/services/api_config.dart';
+import 'package:safeway/services/location_service.dart';
 import 'package:safeway/pages/Driver/Delay alert screen.dart';
 
 // ── Models ───────────────────────────────────────────────────────────────────
@@ -167,6 +168,14 @@ class _DriverDashboardScreenState extends State<DriverDashboardScreen> {
   void initState() {
     super.initState();
     _loadData();
+    // Start sharing driver GPS so students & parents can track the bus
+    LocationService.startDriverSharing();
+  }
+
+  @override
+  void dispose() {
+    LocationService.stopDriverSharing();
+    super.dispose();
   }
 
   Future<void> _loadData() async {

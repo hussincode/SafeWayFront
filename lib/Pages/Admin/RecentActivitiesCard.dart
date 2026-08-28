@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
+import 'package:safeway/Constant/Constant_Color.dart';
 import 'package:safeway/services/admin_service.dart';
 
 class RecentActivitiesCard extends StatefulWidget {
@@ -46,219 +45,221 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.25),
-            borderRadius: BorderRadius.circular(16),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.05),
-                blurRadius: 8,
-                offset: const Offset(0, 2),
-              ),
-            ],
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.divider.withOpacity(0.6)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.03),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
-          child: Column(
-            children: [
-              // Header
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Color(0xFF4F46E5), Color(0xFF7C3AED)],
+        ],
+      ),
+      child: Column(
+        children: [
+          // Header
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(
+              color: AppColors.darkNavy,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(6),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(16),
-                    topRight: Radius.circular(16),
+                  child: const Icon(Icons.history_rounded, color: Colors.white, size: 18),
+                ),
+                const SizedBox(width: 10),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Recent System Activities',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'Real-time operational events & alerts',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.notifications_outlined,
-                        color: Colors.white, size: 18),
-                    const SizedBox(width: 8),
-                    const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Recent Activities',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          'Latest system events',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ],
+                const SizedBox(width: 6),
+                InkWell(
+                  onTap: _loadActivities,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.accentGreen,
+                      borderRadius: BorderRadius.circular(10),
                     ),
-                    const Spacer(),
-                    GestureDetector(
-                      onTap: _loadActivities,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 5,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.2),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: const Text(
+                    child: const Row(
+                      children: [
+                        Icon(Icons.refresh_rounded, color: Colors.white, size: 12),
+                        SizedBox(width: 4),
+                        Text(
                           'Refresh',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                      ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
+            ),
+          ),
 
-              // Table header
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                color: const Color(0xFFF8F9FF),
-                child: const Row(
-                  children: [
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        'TYPE',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                      ),
+          // Table Header
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            color: AppColors.inputBg.withOpacity(0.6),
+            child: const Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'EVENT TYPE',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMuted,
+                      letterSpacing: 0.5,
                     ),
-                    Expanded(
-                      flex: 3,
-                      child: Text(
-                        'DETAILS',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      flex: 2,
-                      child: Text(
-                        'BUS',
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF9CA3AF),
-                        ),
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    'DETAILS',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMuted,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    'BUS ID',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textMuted,
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-              // Body
-              // NOTE: This card is shown inside a SingleChildScrollView in AdminDashboard,
-              // which provides unbounded height constraints. Using Expanded/Column with
-              // non-zero flex inside an unbounded parent will throw:
-              // "RenderFlex children have non-zero flex but incoming height constraints are unbounded".
-              SizedBox(
-                height: 300,
-                child: _isLoading
-                    ? const Center(
+          // Content List
+          SizedBox(
+            height: 280,
+            child: _isLoading
+                ? const Center(
+                    child: CircularProgressIndicator(color: AppColors.accentGreen, strokeWidth: 2),
+                  )
+                : _errorMessage != null
+                    ? Center(
                         child: Padding(
-                          padding: EdgeInsets.all(16),
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                _errorMessage!,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: Colors.red,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              ElevatedButton(
+                                onPressed: _loadActivities,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.darkNavy,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Try again', style: TextStyle(fontSize: 12)),
+                              ),
+                            ],
+                          ),
                         ),
                       )
-                    : _errorMessage != null
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    _errorMessage!,
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(
-                                      color: Color(0xFFB91C1C),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  ElevatedButton.icon(
-                                    onPressed: _loadActivities,
-                                    icon: const Icon(Icons.refresh),
-                                    label: const Text('Try again'),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          )
-                        : _activities.isEmpty
-                            ? const Center(
-                                child: Text(
-                                  'No activities found',
-                                  style: TextStyle(
-                                    color: Color(0xFF6B7280),
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                padding: EdgeInsets.zero,
-                                itemCount: _activities.length,
-                                itemBuilder: (context, index) {
-                                  final item = _activities[index];
+                : _activities.isEmpty
+                    ? const Center(
+                        child: Text(
+                          'No recent activities recorded',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      )
+                    : ListView.separated(
+                        padding: EdgeInsets.zero,
+                        itemCount: _activities.length,
+                        separatorBuilder: (context, index) => const Divider(
+                          height: 1,
+                          thickness: 1,
+                          color: AppColors.divider,
+                        ),
+                        itemBuilder: (context, index) {
+                          final item = _activities[index];
+                          final map = item is Map<String, dynamic> ? item : _decodeDynamicToMap(item);
 
-                                  final map = item is Map<String, dynamic>
-                                      ? item
-                                      : _decodeDynamicToMap(item);
+                          final type = (map['type'] ?? map['Type'] ?? 'Activity').toString();
+                          final details = (map['details'] ?? map['Details'] ?? '').toString();
+                          final bus = (map['bus'] ?? map['Bus'] ?? 'N/A').toString();
+                          final iconName = (map['icon'] ?? map['Icon'] ?? '').toString();
+                          final colorHex = (map['color'] ?? map['Color'] ?? '').toString();
 
-                                  final type = (map['type'] ?? map['Type'] ?? 'Activity')
-                                      .toString();
-                                  final details =
-                                      (map['details'] ?? map['Details'] ?? '')
-                                          .toString();
-                                  final bus = (map['bus'] ?? map['Bus'] ?? '')
-                                      .toString();
-                                  final iconName = (map['icon'] ?? map['Icon'] ?? '')
-                                      .toString();
-                                  final colorHex = (map['color'] ?? map['Color'] ?? '')
-                                      .toString();
+                          final rowColor = _hexToColor(colorHex);
 
-                                  final rowColor = _hexToColor(colorHex);
-
-                                  return _activityRow(
-                                    type: type,
-                                    details: details,
-                                    bus: bus,
-                                    color: rowColor,
-                                    icon: _iconDataFromName(iconName),
-                                  );
-                                },
-                              ),
-              ),
-            ],
+                          return _activityRow(
+                            type: type,
+                            details: details,
+                            bus: bus,
+                            color: rowColor,
+                            icon: _iconDataFromName(iconName),
+                          );
+                        },
+                      ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -267,8 +268,10 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
     if (item == null) return const {};
     if (item is Map<String, dynamic>) return item;
     if (item is String) {
-      final decoded = jsonDecode(item);
-      if (decoded is Map<String, dynamic>) return decoded;
+      try {
+        final decoded = jsonDecode(item);
+        if (decoded is Map<String, dynamic>) return decoded;
+      } catch (_) {}
     }
     return const {};
   }
@@ -282,12 +285,7 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Color(0xFFF3F4F6)),
-        ),
-      ),
+      color: AppColors.cardBg,
       child: Row(
         children: [
           Expanded(
@@ -296,14 +294,16 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
               children: [
                 Icon(icon, color: color, size: 16),
                 const SizedBox(width: 6),
-                Text(
-                  type,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: color,
-                    fontWeight: FontWeight.w600,
+                Expanded(
+                  child: Text(
+                    type,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: color,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
@@ -313,28 +313,34 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
             flex: 3,
             child: Text(
               details,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 12,
-                color: Color(0xFF374151),
+                color: AppColors.textPrimary,
               ),
             ),
           ),
           Expanded(
             flex: 2,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                bus,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 10,
-                  color: Color(0xFF1D4ED8),
-                  fontWeight: FontWeight.w600,
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.inputBg,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.divider),
+                ),
+                child: Text(
+                  bus,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: AppColors.darkNavy,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
@@ -346,7 +352,7 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
 
   Color _hexToColor(String hexString) {
     if (hexString.isEmpty) {
-      return const Color(0xFF16A34A);
+      return AppColors.accentGreen;
     }
     try {
       final hex = hexString.replaceFirst('#', '');
@@ -356,9 +362,9 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
       if (hex.length == 8) {
         return Color(int.parse(hex, radix: 16));
       }
-      return const Color(0xFF16A34A);
+      return AppColors.accentGreen;
     } catch (_) {
-      return const Color(0xFF16A34A);
+      return AppColors.accentGreen;
     }
   }
 
@@ -373,12 +379,11 @@ class _RecentActivitiesCardState extends State<RecentActivitiesCard> {
       case 'alt_route':
         return Icons.alt_route_outlined;
       case 'check_circle':
-        return Icons.check_circle;
+        return Icons.check_circle_outline;
       case 'warning':
         return Icons.warning_amber_rounded;
       default:
-        return Icons.circle_outlined;
+        return Icons.info_outline_rounded;
     }
   }
 }
-

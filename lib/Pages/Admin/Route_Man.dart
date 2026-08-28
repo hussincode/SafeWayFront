@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:safeway/Constant/Constant_Color.dart';
 import 'package:safeway/services/manage_routes_service.dart';
 
 // ── DATA MODELS ──
@@ -148,11 +149,11 @@ class _ManageRoutesScreenState extends State<ManageRoutesScreen> {
   }).toList();
 
   // ── COLORS ──
-  static const _green = Color(0xFF16A34A);
-  static const _greenDark = Color(0xFF15803D);
-  static const _blue = Color(0xFF3B5BDB);
-  static const _blueDark = Color(0xFF2F4AC0);
-  static const _bg = Color(0xFFF5F6FA);
+  static const _green = AppColors.accentGreen;
+  static const _greenDark = AppColors.darkNavy;
+  static const _blue = AppColors.darkNavy;
+  static const _blueDark = AppColors.accentGreen;
+  static const _bg = AppColors.bgGradientStart;
 
   @override
   void dispose() {

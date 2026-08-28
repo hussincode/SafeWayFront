@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:safeway/Constant/Constant_Color.dart';
 import 'package:safeway/services/location_service.dart';
@@ -43,6 +44,7 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
   List<LatLng> _routePoints = [];
 
   LatLng? _busLocation;
+  LatLng? _myLocation; // Student's live GPS position
   String _eta = 'Loading...';
   double _milesAway = 0;
   bool _isConnected = false;
@@ -68,7 +70,7 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
   Future<void> _fetchLocation({bool manual = false}) async {
     if (manual) setState(() => _refreshing = true);
 
-    final location = await LocationService.getStudentLocation();
+    final location = await LocationService.getBusLocation();
     if (!mounted) return;
 
     if (location != null) {
@@ -107,6 +109,43 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
         _refreshing = false;
       });
     }
+
+    // Fetch student's own GPS position
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _myLocation = LatLng(pos.latitude, pos.longitude);
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _openFullScreenMap(LatLng busLoc) {
+    final routePts = _routePoints.isEmpty
+        ? [busLoc, widget.myStop]
+        : _routePoints;
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => FullScreenMapPage(
+          busLocation: busLoc,
+          myStop: widget.myStop,
+          myLocation: _myLocation,
+          routePoints: routePts,
+          busNumber: widget.busNumber,
+          pickupStopName: widget.pickupStopName,
+          isConnected: _isConnected,
+          mapTheme: _mapTheme,
+        ),
+      ),
+    );
   }
 
   String _updatedLabel() {
@@ -263,64 +302,78 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
             borderRadius: BorderRadius.circular(18),
             child: Stack(
               children: [
-                SizedBox(
-                  height: 320,
-                  child: FlutterMap(
-                    mapController: _mapController,
-                    options: MapOptions(
-                      initialCenter: busLoc,
-                      initialZoom: 14.0,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.all,
+                GestureDetector(
+                  onTap: () => _openFullScreenMap(busLoc),
+                  child: SizedBox(
+                    height: 320,
+                    child: AbsorbPointer(
+                      absorbing: false,
+                      child: FlutterMap(
+                        mapController: _mapController,
+                        options: MapOptions(
+                          initialCenter: busLoc,
+                          initialZoom: 14.0,
+                          interactionOptions: const InteractionOptions(
+                            flags: InteractiveFlag.all,
+                          ),
+                        ),
+                        children: [
+                          TileLayer(
+                            urlTemplate: MapService.getTileUrl(_mapTheme),
+                            subdomains: MapService.subdomains,
+                            userAgentPackageName: 'com.example.safeway',
+                            maxZoom: 19,
+                          ),
+                          PolylineLayer(
+                            polylines: [
+                              Polyline(
+                                points: routePts,
+                                strokeWidth: 7.0,
+                                color: AppColors.accentGreen.withOpacity(0.3),
+                              ),
+                              Polyline(
+                                points: routePts,
+                                strokeWidth: 3.5,
+                                color: AppColors.accentGreen,
+                              ),
+                            ],
+                          ),
+                          MarkerLayer(
+                            markers: [
+                              Marker(
+                                point: busLoc,
+                                width: 90,
+                                height: 70,
+                                child: MapService.buildBusMarker(
+                                  busCode: widget.busNumber,
+                                  isLive: _isConnected,
+                                ),
+                              ),
+                              Marker(
+                                point: widget.myStop,
+                                width: 90,
+                                height: 70,
+                                child: MapService.buildStudentMarker(
+                                  label: widget.pickupStopName.isNotEmpty
+                                      ? widget.pickupStopName
+                                      : widget.pickupStopName,
+                                  isLive: true,
+                                ),
+                              ),
+                              if (_myLocation != null)
+                                Marker(
+                                  point: _myLocation!,
+                                  width: 90,
+                                  height: 70,
+                                  child: MapService.buildMyLocationMarker(
+                                    label: 'You',
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    children: [
-                      // CartoDB HD Retina Tiles
-                      TileLayer(
-                        urlTemplate: MapService.getTileUrl(_mapTheme),
-                        subdomains: MapService.subdomains,
-                        userAgentPackageName: 'com.example.safeway',
-                        maxZoom: 19,
-                      ),
-                      PolylineLayer(
-                        polylines: [
-                          Polyline(
-                            points: routePts,
-                            strokeWidth: 7.0,
-                            color: AppColors.accentGreen.withOpacity(0.3),
-                          ),
-                          Polyline(
-                            points: routePts,
-                            strokeWidth: 3.5,
-                            color: AppColors.accentGreen,
-                          ),
-                        ],
-                      ),
-                      MarkerLayer(
-                        markers: [
-                          Marker(
-                            point: busLoc,
-                            width: 90,
-                            height: 70,
-                            child: MapService.buildBusMarker(
-                              busCode: widget.busNumber,
-                              isLive: _isConnected,
-                            ),
-                          ),
-                          Marker(
-                            point: widget.myStop,
-                            width: 90,
-                            height: 70,
-                            child: MapService.buildStudentMarker(
-                              label: widget.pickupStopName.isNotEmpty
-                                  ? widget.pickupStopName
-                                  : widget.pickupStopName,
-                              isLive: true,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
                   ),
                 ),
                 Positioned(
@@ -413,6 +466,32 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
                         fontSize: 11,
                         fontWeight: FontWeight.w600,
                         color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                ),
+                // Fullscreen expand button
+                Positioned(
+                  right: 10,
+                  bottom: 10,
+                  child: GestureDetector(
+                    onTap: () => _openFullScreenMap(busLoc),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.08),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.fullscreen_rounded,
+                        size: 20,
+                        color: AppColors.darkNavy,
                       ),
                     ),
                   ),
@@ -721,6 +800,180 @@ class _TrackBusScreenState extends State<TrackBusScreen> {
             color: AppColors.darkNavy,
           ),
         ),
+      ),
+    );
+  }
+}
+
+class FullScreenMapPage extends StatefulWidget {
+  final LatLng busLocation;
+  final LatLng myStop;
+  final LatLng? myLocation;
+  final List<LatLng> routePoints;
+  final String busNumber;
+  final String pickupStopName;
+  final bool isConnected;
+  final MapThemeMode mapTheme;
+
+  const FullScreenMapPage({
+    super.key,
+    required this.busLocation,
+    required this.myStop,
+    required this.myLocation,
+    required this.routePoints,
+    required this.busNumber,
+    required this.pickupStopName,
+    required this.isConnected,
+    required this.mapTheme,
+  });
+
+  @override
+  State<FullScreenMapPage> createState() => _FullScreenMapPageState();
+}
+
+class _FullScreenMapPageState extends State<FullScreenMapPage> {
+  final MapController _fullMapController = MapController();
+  late MapThemeMode _theme;
+
+  @override
+  void initState() {
+    super.initState();
+    _theme = widget.mapTheme;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Stack(
+        children: [
+          FlutterMap(
+            mapController: _fullMapController,
+            options: MapOptions(
+              initialCenter: widget.busLocation,
+              initialZoom: 15.0,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all,
+              ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: MapService.getTileUrl(_theme),
+                subdomains: MapService.subdomains,
+                userAgentPackageName: 'com.example.safeway',
+                maxZoom: 19,
+              ),
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: widget.routePoints,
+                    strokeWidth: 7.0,
+                    color: AppColors.accentGreen.withOpacity(0.3),
+                  ),
+                  Polyline(
+                    points: widget.routePoints,
+                    strokeWidth: 3.5,
+                    color: AppColors.accentGreen,
+                  ),
+                ],
+              ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: widget.busLocation,
+                    width: 90,
+                    height: 70,
+                    child: MapService.buildBusMarker(
+                      busCode: widget.busNumber,
+                      isLive: widget.isConnected,
+                    ),
+                  ),
+                  Marker(
+                    point: widget.myStop,
+                    width: 90,
+                    height: 70,
+                    child: MapService.buildStudentMarker(
+                      label: widget.pickupStopName,
+                      isLive: true,
+                    ),
+                  ),
+                  if (widget.myLocation != null)
+                    Marker(
+                      point: widget.myLocation!,
+                      width: 90,
+                      height: 70,
+                      child: MapService.buildMyLocationMarker(label: 'You'),
+                    ),
+                ],
+              ),
+            ],
+          ),
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: const Icon(
+                        Icons.close_rounded,
+                        color: AppColors.darkNavy,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        if (_theme == MapThemeMode.voyager) {
+                          _theme = MapThemeMode.light;
+                        } else if (_theme == MapThemeMode.light) {
+                          _theme = MapThemeMode.dark;
+                        } else {
+                          _theme = MapThemeMode.voyager;
+                        }
+                      });
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.92),
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.15),
+                            blurRadius: 8,
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        _theme == MapThemeMode.dark
+                            ? Icons.dark_mode
+                            : (_theme == MapThemeMode.light
+                                  ? Icons.light_mode
+                                  : Icons.map_rounded),
+                        color: AppColors.darkNavy,
+                        size: 20,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

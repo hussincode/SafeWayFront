@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 import 'package:safeway/services/api_config.dart';
@@ -94,6 +95,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   // ── Bus tracking ──
   LatLng _busLocation = const LatLng(24.7136, 46.6753);
   final LatLng _myStop = const LatLng(24.7200, 46.6800);
+  LatLng? _myLocation; // Student's live GPS position
   List<LatLng> _routePoints = [];
   String _eta = 'Loading...';
   bool _isConnected = false;
@@ -198,9 +200,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     }
   }
 
-  // ── Fetch live bus location ──
+  // ── Fetch live bus location (driver's position) ──
   Future<void> _fetchBusLocation() async {
-    final location = await LocationService.getStudentLocation();
+    // Fetch bus (driver) location
+    final location = await LocationService.getBusLocation();
     if (!mounted) return;
 
     if (location != null) {
@@ -224,6 +227,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     } else {
       if (mounted) setState(() => _isConnected = false);
     }
+
+    // Fetch student's own GPS position
+    try {
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+      );
+      if (mounted) {
+        setState(() {
+          _myLocation = LatLng(pos.latitude, pos.longitude);
+        });
+      }
+    } catch (_) {}
   }
 
   void _logout() {
@@ -724,6 +739,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               isLive: true,
                             ),
                           ),
+                          if (_myLocation != null)
+                            Marker(
+                              point: _myLocation!,
+                              width: 90,
+                              height: 70,
+                              child: MapService.buildMyLocationMarker(
+                                label: 'You',
+                              ),
+                            ),
                         ],
                       ),
                     ],

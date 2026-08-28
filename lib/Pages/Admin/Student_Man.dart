@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:safeway/Constant/Constant_Color.dart';
 import 'package:safeway/services/api_config.dart';
 import 'package:safeway/services/admin_service.dart';
 
@@ -62,11 +63,6 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
   final String _filterStatus = '';
 
   final _searchCtrl = TextEditingController();
-
-  // Unique routes and statuses for filter dropdowns
-  List<String> get _routes =>
-      _allStudents.map((s) => s.routeName).toSet().toList()..sort();
-  List<String> get _statuses => ['PAID', 'UNPAID', 'EXPIRED'];
 
   int get _paidCount =>
       _allStudents.where((s) => s.subscriptionStatus == 'PAID').length;
@@ -162,18 +158,18 @@ class _ManageStudentsScreenState extends State<ManageStudentsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F6FA),
+      backgroundColor: AppColors.bgGradientStart,
       body: Column(
         children: [
           _buildHeader(context),
           Expanded(
             child: _loading
                 ? const Center(
-                    child: CircularProgressIndicator(color: Color(0xFF4F46E5)),
+                    child: CircularProgressIndicator(color: AppColors.accentGreen),
                   )
                 : RefreshIndicator(
                     onRefresh: _loadStudents,
-                    color: const Color(0xFF4F46E5),
+                    color: AppColors.accentGreen,
                     child: SingleChildScrollView(
                       physics: const AlwaysScrollableScrollPhysics(),
                       padding: const EdgeInsets.all(16),

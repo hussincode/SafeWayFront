@@ -151,8 +151,9 @@ class _ChangePickupStationScreenState extends State<ChangePickupStationScreen> {
         });
       }
     } catch (_) {
-      if (mounted)
+      if (mounted) {
         setState(() => _errorMessage = 'Network error. Please try again.');
+      }
     } finally {
       if (mounted) setState(() => _submitting = false);
     }

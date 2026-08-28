@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:safeway/Constant/Constant_Color.dart';
 import 'package:safeway/services/admin_service.dart';
 
 // ── DATA MODEL ──
@@ -26,8 +28,8 @@ class Driver {
   bool get isActive => status == 'Active';
 
   static Driver fromJson(Map<String, dynamic> json) {
-    final id = (json['driverId'] ?? json['id'] ?? '').toString();
-
+    final rawDbId = (json['id'] ?? '').toString();
+    final driverCode = (json['driverId'] ?? json['uniqueID'] ?? json['uniqueId'] ?? rawDbId).toString();
     final name = (json['fullName'] ?? json['full_name'] ?? '').toString();
 
     final initials = name
@@ -39,14 +41,14 @@ class Driver {
         .join();
 
     return Driver(
-      id: id,
+      id: driverCode.isEmpty ? rawDbId : driverCode,
       name: name,
       phone: (json['phone'] ?? '').toString(),
-      busId: (json['busId'] ?? json['bus_id'] ?? '').toString(),
-      route: (json['route'] ?? '').toString(),
+      busId: (json['busId'] ?? json['bus_id'] ?? json['busNumber'] ?? '').toString(),
+      route: (json['route'] ?? json['routeName'] ?? '').toString(),
       status: (json['status'] ?? 'Active').toString(),
       avatarInitials: initials.isEmpty ? '??' : initials,
-      uniqueId: (json['uniqueId'] ?? '').toString(),
+      uniqueId: rawDbId.isEmpty ? driverCode : rawDbId,
     );
   }
 }
@@ -127,11 +129,11 @@ class _ManageDriversScreenState extends State<ManageDriversScreen> {
   int get _inactiveCount => _allDrivers.where((d) => !d.isActive).length;
   int get _totalDrivers => _allDrivers.length;
 
-  static const _orange = Color(0xFFFF9800);
-  static const _orangeDark = Color(0xFFF57C00);
-  static const _green = Color(0xFF4CAF50);
-  static const _grey = Color(0xFF9E9E9E);
-  static const _bg = Color(0xFFF5F6FA);
+  static const _orange = AppColors.accentGreen;
+  static const _orangeDark = AppColors.darkNavy;
+  static const _green = AppColors.badgeDot;
+  static const _grey = AppColors.textMuted;
+  static const _bg = AppColors.bgGradientStart;
 
   @override
   void dispose() {
@@ -576,10 +578,15 @@ class _ManageDriversScreenState extends State<ManageDriversScreen> {
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 4),
+            IconButton(
+              tooltip: 'Edit driver',
+              icon: const Icon(Icons.edit_outlined, color: AppColors.darkNavy, size: 20),
+              onPressed: () => _openEditDriverSheet(driver),
+            ),
             IconButton(
               tooltip: 'Delete driver',
-              icon: const Icon(Icons.delete_outline, color: Colors.redAccent),
+              icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
               onPressed: () => _confirmDeleteDriver(driver),
             ),
           ],
@@ -592,12 +599,27 @@ class _ManageDriversScreenState extends State<ManageDriversScreen> {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _DriverDetailsSheet(driver: driver),
+      builder: (_) => _DriverDetailsSheet(
+        driver: driver,
+        onRefresh: _fetchDrivers,
+      ),
+    );
+  }
+
+  void _openEditDriverSheet(Driver driver) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _EditDriverSheet(
+        driver: driver,
+        onUpdated: _fetchDrivers,
+      ),
     );
   }
 
   Future<void> _confirmDeleteDriver(Driver driver) async {
-    final int? driverDbId = int.tryParse(driver.uniqueId);
+    final int? driverDbId = int.tryParse(driver.uniqueId) ?? int.tryParse(driver.id);
     if (driverDbId == null) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -680,7 +702,8 @@ class _ManageDriversScreenState extends State<ManageDriversScreen> {
 // ── DRIVER DETAILS BOTTOM SHEET ──
 class _DriverDetailsSheet extends StatelessWidget {
   final Driver driver;
-  const _DriverDetailsSheet({required this.driver});
+  final VoidCallback? onRefresh;
+  const _DriverDetailsSheet({required this.driver, this.onRefresh});
 
   static const _orange = Color(0xFFFF9800);
   static const _green = Color(0xFF4CAF50);
@@ -693,83 +716,86 @@ class _DriverDetailsSheet extends StatelessWidget {
         borderRadius: BorderRadius.only(topLeft: Radius.circular(24), topRight: Radius.circular(24)),
       ),
       padding: const EdgeInsets.all(24),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
-          const SizedBox(height: 20),
-          Container(
-            width: 72,
-            height: 72,
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(colors: [_orange, Color(0xFFF57C00)]),
-              shape: BoxShape.circle,
-            ),
-            child: Center(
-              child: Text(driver.avatarInitials, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Text(driver.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E))),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            decoration: BoxDecoration(
-              color: driver.isActive ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Text(
-              driver.status,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: driver.isActive ? _green : Colors.grey),
-            ),
-          ),
-          const SizedBox(height: 20),
-          _detailRow(Icons.phone_outlined, 'Phone', driver.phone.isEmpty ? '—' : driver.phone),
-          _detailRow(Icons.directions_bus_outlined, 'Bus ID', driver.busId.isEmpty ? '—' : driver.busId),
-          _detailRow(Icons.alt_route_outlined, 'Route', driver.route.isEmpty ? '—' : driver.route),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black87,
-                    side: BorderSide(color: Colors.grey.shade300),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Close'),
-                ),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 40, height: 4, decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2))),
+            const SizedBox(height: 16),
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(colors: [_orange, Color(0xFFF57C00)]),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      backgroundColor: Colors.transparent,
-                      builder: (_) => _EditDriverSheet(
-                        driver: driver,
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: _orange,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: const Text('Edit Driver'),
-                ),
+              child: Center(
+                child: Text(driver.avatarInitials, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
               ),
-            ],
-          ),
-          const SizedBox(height: 8),
-        ],
+            ),
+            const SizedBox(height: 10),
+            Text(driver.name, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkNavy)),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+              decoration: BoxDecoration(
+                color: driver.isActive ? const Color(0xFFDCFCE7) : const Color(0xFFF3F4F6),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Text(
+                driver.status,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: driver.isActive ? _green : Colors.grey),
+              ),
+            ),
+            const SizedBox(height: 14),
+            _detailRow(Icons.phone_outlined, 'Phone', driver.phone.isEmpty ? '—' : driver.phone),
+            _detailRow(Icons.directions_bus_outlined, 'Bus ID', driver.busId.isEmpty ? 'BUS-101' : driver.busId),
+            _detailRow(Icons.alt_route_outlined, 'Route', driver.route.isEmpty ? 'Route A - Downtown' : driver.route),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.black87,
+                      side: BorderSide(color: Colors.grey.shade300),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Close'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      Navigator.pop(context);
+                      showModalBottomSheet(
+                        context: context,
+                        isScrollControlled: true,
+                        backgroundColor: Colors.transparent,
+                        builder: (_) => _EditDriverSheet(
+                          driver: driver,
+                          onUpdated: onRefresh,
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.accentGreen,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    child: const Text('Edit Driver'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+          ],
+        ),
       ),
     );
   }
@@ -799,10 +825,11 @@ class _DriverDetailsSheet extends StatelessWidget {
   }
 }
 
-// ── ADD DRIVER BOTTOM SHEET ──
+// ── EDIT DRIVER BOTTOM SHEET ──
 class _EditDriverSheet extends StatefulWidget {
   final Driver driver;
-  const _EditDriverSheet({required this.driver});
+  final VoidCallback? onUpdated;
+  const _EditDriverSheet({required this.driver, this.onUpdated});
 
   @override
   State<_EditDriverSheet> createState() => _EditDriverSheetState();
@@ -812,11 +839,18 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _busIdController = TextEditingController();
-  final _routeController = TextEditingController();
 
   final AdminService _adminService = AdminService();
 
-  static const _orange = Color(0xFFFF9800);
+  List<String> _availableRoutes = [
+    'Route A - Downtown',
+    'Route B - North Side',
+    'Route C - East District',
+    'Route D - West End',
+    'Route E - South Gate',
+  ];
+  String? _selectedRoute;
+  bool _loadingRoutes = true;
 
   @override
   void initState() {
@@ -824,7 +858,33 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
     _nameController.text = widget.driver.name;
     _phoneController.text = widget.driver.phone;
     _busIdController.text = widget.driver.busId;
-    _routeController.text = widget.driver.route;
+    _selectedRoute = widget.driver.route.isNotEmpty ? widget.driver.route : null;
+    _loadSystemRoutes();
+  }
+
+  Future<void> _loadSystemRoutes() async {
+    try {
+      final routesData = await _adminService.getRoutes();
+      final routeNames = routesData
+          .map((r) => (r['name'] ?? r['routeName'] ?? '').toString())
+          .where((n) => n.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (routeNames.isNotEmpty && mounted) {
+        setState(() {
+          _availableRoutes = routeNames;
+          if (_selectedRoute == null || !_availableRoutes.contains(_selectedRoute)) {
+            _selectedRoute = _availableRoutes.first;
+          }
+          _loadingRoutes = false;
+        });
+      } else {
+        if (mounted) setState(() => _loadingRoutes = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingRoutes = false);
+    }
   }
 
   @override
@@ -832,7 +892,6 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
     _nameController.dispose();
     _phoneController.dispose();
     _busIdController.dispose();
-    _routeController.dispose();
     super.dispose();
   }
 
@@ -840,7 +899,7 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
     final fullName = _nameController.text.trim();
     final phone = _phoneController.text.trim();
     final busId = _busIdController.text.trim();
-    final routeName = _routeController.text.trim();
+    final routeName = _selectedRoute ?? '';
 
     if (fullName.isEmpty || busId.isEmpty || routeName.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -849,9 +908,18 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
       return;
     }
 
+    if (phone.isNotEmpty && phone.length != 11) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number must be exactly 11 digits'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
     try {
-      // backend expects int id. Our UI keeps it as string; try parse.
-      final driverId = int.tryParse(widget.driver.id);
+      final driverId = int.tryParse(widget.driver.uniqueId) ?? int.tryParse(widget.driver.id);
       if (driverId == null) {
         throw Exception('Invalid driver id: ${widget.driver.id}');
       }
@@ -864,10 +932,12 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
         routeName: routeName,
       );
 
+      widget.onUpdated?.call();
+
       if (!context.mounted) return;
       Navigator.pop(context);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Driver updated successfully'), backgroundColor: _orange),
+        const SnackBar(content: Text('Driver updated successfully'), backgroundColor: AppColors.accentGreen),
       );
     } catch (e) {
       if (!context.mounted) return;
@@ -897,20 +967,20 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
             const SizedBox(height: 16),
             const Text(
               'Edit Driver',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkNavy),
             ),
             const SizedBox(height: 16),
             _field(_nameController, 'Full Name', Icons.person_outline),
-            _field(_phoneController, 'Phone', Icons.phone_outlined),
+            _phoneField(_phoneController, 'Phone Number (11 digits max)'),
             _field(_busIdController, 'Bus Number', Icons.directions_bus_outlined),
-            _field(_routeController, 'Route Name', Icons.alt_route_outlined),
+            _routeDropdown(),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _orange,
+                  backgroundColor: AppColors.accentGreen,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -948,15 +1018,101 @@ class _EditDriverSheetState extends State<_EditDriverSheet> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: _orange),
+            borderSide: const BorderSide(color: AppColors.accentGreen),
           ),
         ),
       ),
     );
   }
+
+  Widget _phoneField(TextEditingController ctrl, String hint) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: ctrl,
+        keyboardType: TextInputType.phone,
+        maxLength: 11,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(11),
+        ],
+        decoration: InputDecoration(
+          hintText: hint,
+          counterText: '',
+          hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          prefixIcon: Icon(Icons.phone_outlined, color: Colors.grey[400], size: 18),
+          filled: true,
+          fillColor: const Color(0xFFF8F9FF),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.accentGreen),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _routeDropdown() {
+    if (_selectedRoute != null && !_availableRoutes.contains(_selectedRoute)) {
+      _availableRoutes.add(_selectedRoute!);
+    }
+    if (_selectedRoute == null && _availableRoutes.isNotEmpty) {
+      _selectedRoute = _availableRoutes.first;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        value: _selectedRoute,
+        decoration: InputDecoration(
+          hintText: 'Select System Route',
+          hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          prefixIcon: Icon(Icons.alt_route_outlined, color: Colors.grey[400], size: 18),
+          filled: true,
+          fillColor: const Color(0xFFF8F9FF),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.accentGreen),
+          ),
+        ),
+        items: _availableRoutes.map((routeName) {
+          return DropdownMenuItem<String>(
+            value: routeName,
+            child: Text(
+              routeName,
+              style: const TextStyle(fontSize: 13, color: AppColors.darkNavy, fontWeight: FontWeight.w500),
+            ),
+          );
+        }).toList(),
+        onChanged: (val) {
+          setState(() {
+            _selectedRoute = val;
+          });
+        },
+      ),
+    );
+  }
 }
 
-// existing add sheet
+// ── ADD DRIVER BOTTOM SHEET ──
 class _AddDriverSheet extends StatefulWidget {
   final Future<void> Function(String fullName, String busNumber, String phone, String routeName) onAdd;
   const _AddDriverSheet({required this.onAdd});
@@ -969,28 +1125,77 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _busIdController = TextEditingController();
-  final _routeController = TextEditingController();
 
-  static const _orange = Color(0xFFFF9800);
+  final AdminService _adminService = AdminService();
+
+  List<String> _availableRoutes = [
+    'Route A - Downtown',
+    'Route B - North Side',
+    'Route C - East District',
+    'Route D - West End',
+    'Route E - South Gate',
+  ];
+  String? _selectedRoute;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSystemRoutes();
+  }
+
+  Future<void> _loadSystemRoutes() async {
+    try {
+      final routesData = await _adminService.getRoutes();
+      final routeNames = routesData
+          .map((r) => (r['name'] ?? r['routeName'] ?? '').toString())
+          .where((n) => n.isNotEmpty)
+          .toSet()
+          .toList();
+
+      if (routeNames.isNotEmpty && mounted) {
+        setState(() {
+          _availableRoutes = routeNames;
+          if (_selectedRoute == null || !_availableRoutes.contains(_selectedRoute)) {
+            _selectedRoute = _availableRoutes.first;
+          }
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
     _busIdController.dispose();
-    _routeController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
     final name = _nameController.text.trim();
-    if (name.isEmpty) return;
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter Full Name'), backgroundColor: Colors.red),
+      );
+      return;
+    }
+
+    final phone = _phoneController.text.trim();
+    if (phone.isNotEmpty && phone.length != 11) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Phone number must be exactly 11 digits'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
 
     await widget.onAdd(
       name,
       _busIdController.text.trim(),
-      _phoneController.text.trim(),
-      _routeController.text.trim(),
+      phone,
+      _selectedRoute ?? (_availableRoutes.isNotEmpty ? _availableRoutes.first : 'Route A - Downtown'),
     );
   }
 
@@ -1014,20 +1219,20 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
             const SizedBox(height: 16),
             const Text(
               'Add New Driver',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF1A1A2E)),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: AppColors.darkNavy),
             ),
             const SizedBox(height: 16),
             _field(_nameController, 'Full Name', Icons.person_outline),
-            _field(_phoneController, 'Phone', Icons.phone_outlined),
-            _field(_busIdController, 'Bus Number', Icons.directions_bus_outlined),
-            _field(_routeController, 'Route Name', Icons.alt_route_outlined),
+            _phoneField(_phoneController, 'Phone Number (11 digits max)'),
+            _field(_busIdController, 'Bus Number (e.g. BUS-101)', Icons.directions_bus_outlined),
+            _routeDropdown(),
             const SizedBox(height: 16),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: _orange,
+                  backgroundColor: AppColors.accentGreen,
                   foregroundColor: Colors.white,
                   elevation: 0,
                   padding: const EdgeInsets.symmetric(vertical: 14),
@@ -1065,9 +1270,95 @@ class _AddDriverSheetState extends State<_AddDriverSheet> {
           ),
           focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: _orange),
+            borderSide: const BorderSide(color: AppColors.accentGreen),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _phoneField(TextEditingController ctrl, String hint) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextField(
+        controller: ctrl,
+        keyboardType: TextInputType.phone,
+        maxLength: 11,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(11),
+        ],
+        decoration: InputDecoration(
+          hintText: hint,
+          counterText: '',
+          hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          prefixIcon: Icon(Icons.phone_outlined, color: Colors.grey[400], size: 18),
+          filled: true,
+          fillColor: const Color(0xFFF8F9FF),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.accentGreen),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _routeDropdown() {
+    if (_selectedRoute != null && !_availableRoutes.contains(_selectedRoute)) {
+      _availableRoutes.add(_selectedRoute!);
+    }
+    if (_selectedRoute == null && _availableRoutes.isNotEmpty) {
+      _selectedRoute = _availableRoutes.first;
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DropdownButtonFormField<String>(
+        value: _selectedRoute,
+        decoration: InputDecoration(
+          hintText: 'Select System Route',
+          hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),
+          prefixIcon: Icon(Icons.alt_route_outlined, color: Colors.grey[400], size: 18),
+          filled: true,
+          fillColor: const Color(0xFFF8F9FF),
+          contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.grey.shade200),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: AppColors.accentGreen),
+          ),
+        ),
+        items: _availableRoutes.map((routeName) {
+          return DropdownMenuItem<String>(
+            value: routeName,
+            child: Text(
+              routeName,
+              style: const TextStyle(fontSize: 13, color: AppColors.darkNavy, fontWeight: FontWeight.w500),
+            ),
+          );
+        }).toList(),
+        onChanged: (val) {
+          setState(() {
+            _selectedRoute = val;
+          });
+        },
       ),
     );
   }

@@ -3,9 +3,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+
 import 'package:http/http.dart' as http;
 import 'package:safeway/services/api_config.dart';
 import 'package:safeway/services/map_service.dart';
+import 'package:safeway/Constant/Constant_Color.dart';
 
 class LiveBusTrackingScreen extends StatefulWidget {
   const LiveBusTrackingScreen({super.key});
@@ -22,66 +24,58 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
   List<LatLng> _routePoints = [];
 
   // ── Locations ──
-  LatLng _busLocation     = const LatLng(30.0444, 31.2357); // Cairo default
+  LatLng _busLocation = const LatLng(30.0444, 31.2357); // Cairo default
   LatLng _studentLocation = const LatLng(30.0500, 31.2400); // Cairo default
 
   // ── Status ──
-  bool   _busConnected     = false;
-  bool   _studentConnected = false;
-  String _eta              = 'Calculating...';
-  String _distance         = '...';
-  String _currentTime      = '';
+  bool _busConnected = false;
+  bool _studentConnected = false;
+  bool _refreshing = false;
+  String _eta = 'Calculating...';
+  String _distance = '...';
+  DateTime? _lastUpdated;
 
   Timer? _refreshTimer;
-  Timer? _clockTimer;
 
   @override
   void initState() {
     super.initState();
-    _updateTime();
     _fetchLocations();
-
-    // Clock every second
-    _clockTimer = Timer.periodic(
-      const Duration(seconds: 1), (_) => _updateTime(),
-    );
 
     // Fetch locations every 5 seconds
     _refreshTimer = Timer.periodic(
-      const Duration(seconds: 5), (_) => _fetchLocations(),
+      const Duration(seconds: 5),
+      (_) => _fetchLocations(),
     );
   }
 
   @override
   void dispose() {
     _refreshTimer?.cancel();
-    _clockTimer?.cancel();
     super.dispose();
   }
 
-  void _updateTime() {
-    final now    = DateTime.now();
-    final hour   = now.hour > 12 ? now.hour - 12 : (now.hour == 0 ? 12 : now.hour);
-    final period = now.hour >= 12 ? 'PM' : 'AM';
+  // ── Fetch both bus and student locations ──
+  Future<void> _fetchLocations({bool manual = false}) async {
+    if (manual) setState(() => _refreshing = true);
+
+    await Future.wait([_fetchBusLocation(), _fetchStudentLocation()]);
+    _calculateETA();
+    _updateRoute();
+
     if (mounted) {
       setState(() {
-        _currentTime = '$hour:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')} $period';
+        _lastUpdated = DateTime.now();
+        _refreshing = false;
       });
     }
   }
 
-  // ── Fetch both bus and student locations ──
-  Future<void> _fetchLocations() async {
-    await Future.wait([
-      _fetchBusLocation(),
-      _fetchStudentLocation(),
-    ]);
-    _calculateETA();
-    _updateRoute();
-  }
-
   Future<void> _updateRoute() async {
-    final pts = await MapService.fetchStreetRoute(_busLocation, _studentLocation);
+    final pts = await MapService.fetchStreetRoute(
+      _busLocation,
+      _studentLocation,
+    );
     if (mounted) {
       setState(() {
         _routePoints = pts;
@@ -91,16 +85,16 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
 
   Future<void> _fetchBusLocation() async {
     try {
-      final res = await http.get(
-        Uri.parse('$apiBaseUrl/api/buslocation/current'),
-      ).timeout(const Duration(seconds: 4));
+      final res = await http
+          .get(Uri.parse('$apiBaseUrl/api/buslocation/current'))
+          .timeout(const Duration(seconds: 4));
 
       if (!mounted) return;
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
-          _busLocation  = LatLng(data['latitude'], data['longitude']);
+          _busLocation = LatLng(data['latitude'], data['longitude']);
           _busConnected = true;
         });
       }
@@ -111,16 +105,16 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
 
   Future<void> _fetchStudentLocation() async {
     try {
-      final res = await http.get(
-        Uri.parse('$apiBaseUrl/api/buslocation/student-current'),
-      ).timeout(const Duration(seconds: 4));
+      final res = await http
+          .get(Uri.parse('$apiBaseUrl/api/buslocation/student-current'))
+          .timeout(const Duration(seconds: 4));
 
       if (!mounted) return;
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
-          _studentLocation  = LatLng(data['latitude'], data['longitude']);
+          _studentLocation = LatLng(data['latitude'], data['longitude']);
           _studentConnected = true;
         });
       }
@@ -137,12 +131,12 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
     );
 
     final distanceKm = distanceMeters / 1000;
-    final etaMins    = (distanceMeters / 300).ceil(); // ~18 km/h
+    final etaMins = (distanceMeters / 300).ceil(); // ~18 km/h
 
     if (mounted) {
       setState(() {
         _distance = '${distanceKm.toStringAsFixed(1)} km';
-        _eta      = etaMins <= 1 ? 'Arriving!' : '$etaMins min';
+        _eta = etaMins <= 1 ? 'Arriving!' : '$etaMins min';
       });
     }
   }
@@ -154,330 +148,583 @@ class _LiveBusTrackingScreenState extends State<LiveBusTrackingScreen> {
     _mapController.move(LatLng(centerLat, centerLng), 13.0);
   }
 
+  void _cycleTheme() {
+    setState(() {
+      if (_mapTheme == MapThemeMode.voyager) {
+        _mapTheme = MapThemeMode.light;
+      } else if (_mapTheme == MapThemeMode.light) {
+        _mapTheme = MapThemeMode.dark;
+      } else {
+        _mapTheme = MapThemeMode.voyager;
+      }
+    });
+  }
+
+  String _updatedLabel() {
+    if (_lastUpdated == null) return 'Not yet updated';
+    final secondsAgo = DateTime.now().difference(_lastUpdated!).inSeconds;
+    if (secondsAgo < 10) return 'Updated just now';
+    if (secondsAgo < 60) return 'Updated ${secondsAgo}s ago';
+    return 'Updated ${(secondsAgo / 60).floor()}m ago';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          _buildHeader(context),
-          _buildStatusBar(),
-          Expanded(child: _buildMap()),
-          _buildBottomInfo(),
-        ],
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(gradient: AppGradients.softBackground),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                child: _buildHeader(context),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: _buildStatusPills(),
+              ),
+              const SizedBox(height: 14),
+              Expanded(child: _buildMapCard()),
+              _buildBottomInfo(),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   // ── HEADER ──
   Widget _buildHeader(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 12,
-        bottom: 14, left: 16, right: 16,
-      ),
-      color: const Color(0xFF16A34A),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Row(children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: const Icon(Icons.arrow_back, color: Colors.white),
-            ),
-            const SizedBox(width: 12),
-            const Text('Live Bus Tracking',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          ]),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(color: Colors.white24, borderRadius: BorderRadius.circular(20)),
-            child: Row(children: [
-              const Icon(Icons.access_time, color: Colors.white, size: 14),
-              const SizedBox(width: 4),
-              Text(_currentTime, style: const TextStyle(color: Colors.white, fontSize: 12)),
-            ]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ── STATUS BAR — Bus + Student connection status ──
-  Widget _buildStatusBar() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      color: const Color(0xFF15803D),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          // Bus status
-          Row(children: [
-            Container(width: 8, height: 8,
-                decoration: BoxDecoration(
-                    color: _busConnected ? Colors.greenAccent : Colors.orange,
-                    shape: BoxShape.circle)),
-            const SizedBox(width: 6),
-            Text(
-              _busConnected ? '🚌 Bus — Live' : '🚌 Bus — Waiting...',
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ]),
-
-          // Student status
-          Row(children: [
-            Container(width: 8, height: 8,
-                decoration: BoxDecoration(
-                    color: _studentConnected ? Colors.greenAccent : Colors.orange,
-                    shape: BoxShape.circle)),
-            const SizedBox(width: 6),
-            Text(
-              _studentConnected ? '🎒 Student — Live' : '🎒 Student — Waiting...',
-              style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ]),
-        ],
-      ),
-    );
-  }
-
-  // ── MAP ──
-  Widget _buildMap() {
-    final routePts = _routePoints.isEmpty ? [_busLocation, _studentLocation] : _routePoints;
-
-    return Stack(
+    return Row(
       children: [
-        FlutterMap(
-          mapController: _mapController,
-          options: MapOptions(
-            initialCenter: _busLocation,
-            initialZoom: 14,
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-          ),
-          children: [
-            // ✅ CartoDB HD Retina Tiles (Free, No API Key needed)
-            TileLayer(
-              urlTemplate: MapService.getTileUrl(_mapTheme),
-              subdomains: MapService.subdomains,
-              userAgentPackageName: 'com.example.safeway',
-              maxZoom: 19,
-            ),
-
-            // Route line along actual streets
-            PolylineLayer(polylines: [
-              // Outer glow line
-              Polyline(
-                points: routePts,
-                color: const Color(0xFF6366F1).withOpacity(0.3),
-                strokeWidth: 8.0,
-              ),
-              // Main road polyline
-              Polyline(
-                points: routePts,
-                color: const Color(0xFF4F46E5),
-                strokeWidth: 4.0,
-              ),
-            ]),
-
-            // Custom Markers
-            MarkerLayer(markers: [
-              // 🚌 Bus Marker
-              Marker(
-                point: _busLocation,
-                width: 90,
-                height: 70,
-                child: MapService.buildBusMarker(
-                  busCode: 'BUS-101',
-                  isLive: _busConnected,
-                ),
-              ),
-
-              // 🎒 Student Marker
-              Marker(
-                point: _studentLocation,
-                width: 90,
-                height: 70,
-                child: MapService.buildStudentMarker(
-                  label: 'Student',
-                  isLive: _studentConnected,
-                ),
-              ),
-            ]),
-          ],
-        ),
-
-        // ── ETA Badge top right ──
-        Positioned(
-          top: 16, right: 16,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF4F46E5),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 8)],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                const Text('Estimated Arrival', style: TextStyle(color: Colors.white70, fontSize: 10)),
-                Text(_eta, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        ),
-
-        // ── Map controls top left (Fit Screen + Theme Switcher) ──
-        Positioned(
-          top: 16, left: 16,
-          child: Row(
+        _roundIconButton(Icons.arrow_back, onTap: () => Navigator.pop(context)),
+        Expanded(
+          child: Column(
             children: [
-              GestureDetector(
-                onTap: _fitBothMarkers,
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6)],
-                  ),
-                  child: const Icon(Icons.fit_screen, color: Color(0xFF4F46E5), size: 20),
+              const Text(
+                'LIVE TRACKING',
+                style: TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 1.0,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.accentGreen,
                 ),
               ),
-              const SizedBox(width: 8),
-              GestureDetector(
-                onTap: () {
-                  setState(() {
-                    if (_mapTheme == MapThemeMode.voyager) {
-                      _mapTheme = MapThemeMode.light;
-                    } else if (_mapTheme == MapThemeMode.light) {
-                      _mapTheme = MapThemeMode.dark;
-                    } else {
-                      _mapTheme = MapThemeMode.voyager;
-                    }
-                  });
-                },
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 6)],
-                  ),
-                  child: Icon(
-                    _mapTheme == MapThemeMode.dark
-                        ? Icons.dark_mode
-                        : (_mapTheme == MapThemeMode.light ? Icons.light_mode : Icons.map_rounded),
-                    color: const Color(0xFF4F46E5),
-                    size: 20,
-                  ),
+              const SizedBox(height: 2),
+              const Text(
+                'Live Bus Tracking',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
               ),
             ],
           ),
         ),
-
-        // ── Zoom controls ──
-        Positioned(
-          bottom: 20, right: 16,
-          child: Column(children: [
-            _zoomBtn(Icons.add, () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom + 1)),
-            const SizedBox(height: 8),
-            _zoomBtn(Icons.remove, () => _mapController.move(_mapController.camera.center, _mapController.camera.zoom - 1)),
-          ]),
+        _roundIconButton(
+          Icons.refresh_rounded,
+          onTap: () => _fetchLocations(manual: true),
+          spinning: _refreshing,
         ),
-
-        // ── No location warning ──
-        if (!_busConnected && !_studentConnected)
-          Positioned(
-            bottom: 80, left: 16, right: 16,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: const Color(0xFFFFF7ED),
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: const Color(0xFFEA580C).withOpacity(0.4)),
-              ),
-              child: const Row(children: [
-                Icon(Icons.wifi_off, color: Color(0xFFEA580C), size: 16),
-                SizedBox(width: 8),
-                Expanded(child: Text(
-                  'Waiting for bus and student to share location...',
-                  style: TextStyle(fontSize: 11, color: Color(0xFFEA580C)),
-                )),
-              ]),
-            ),
-          ),
       ],
     );
   }
 
-  Widget _zoomBtn(IconData icon, VoidCallback onTap) {
+  Widget _roundIconButton(
+    IconData icon, {
+    required VoidCallback onTap,
+    bool spinning = false,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 40, height: 40,
+        width: 44,
+        height: 44,
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 6)],
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 8,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        child: Icon(icon, size: 20, color: const Color(0xFF4F46E5)),
+        child: spinning
+            ? const Padding(
+                padding: EdgeInsets.all(12),
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: AppColors.accentGreen,
+                ),
+              )
+            : Icon(icon, color: AppColors.textPrimary, size: 20),
+      ),
+    );
+  }
+
+  // ── STATUS PILLS — Bus + Student connection status ──
+  Widget _buildStatusPills() {
+    return Row(
+      children: [
+        Expanded(
+          child: _pillBadge(
+            dotColor: _busConnected ? AppColors.accentGreen : Colors.orange,
+            label: _busConnected ? '🚌 Bus · Live' : '🚌 Bus · Waiting',
+            bg: AppColors.cardBg,
+            center: true,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _pillBadge(
+            dotColor: _studentConnected ? AppColors.accentGreen : Colors.orange,
+            label: _studentConnected
+                ? '🎒 Student · Live'
+                : '🎒 Student · Waiting',
+            bg: AppColors.cardBg,
+            center: true,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _pillBadge({
+    required Color dotColor,
+    required String label,
+    required Color bg,
+    Color? textColor,
+    bool center = false,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: center
+            ? MainAxisAlignment.center
+            : MainAxisAlignment.start,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: textColor ?? AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── MAP CARD ──
+  Widget _buildMapCard() {
+    final routePts = _routePoints.isEmpty
+        ? [_busLocation, _studentLocation]
+        : _routePoints;
+    final bothLive = _busConnected && _studentConnected;
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            children: [
+              SizedBox.expand(
+                child: FlutterMap(
+                  mapController: _mapController,
+                  options: MapOptions(
+                    initialCenter: _busLocation,
+                    initialZoom: 14,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate: MapService.getTileUrl(_mapTheme),
+                      subdomains: MapService.subdomains,
+                      userAgentPackageName: 'com.example.safeway',
+                      maxZoom: 19,
+                    ),
+                    PolylineLayer(
+                      polylines: [
+                        Polyline(
+                          points: routePts,
+                          strokeWidth: 7.0,
+                          color: AppColors.accentGreen.withOpacity(0.3),
+                        ),
+                        Polyline(
+                          points: routePts,
+                          strokeWidth: 3.5,
+                          color: AppColors.accentGreen,
+                        ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          point: _busLocation,
+                          width: 90,
+                          height: 70,
+                          child: MapService.buildBusMarker(
+                            busCode: 'BUS-101',
+                            isLive: _busConnected,
+                          ),
+                        ),
+                        Marker(
+                          point: _studentLocation,
+                          width: 90,
+                          height: 70,
+                          child: MapService.buildStudentMarker(
+                            label: 'Student',
+                            isLive: _studentConnected,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── Live/ETA badge top-left ──
+              Positioned(
+                left: 10,
+                top: 10,
+                child: _pillBadge(
+                  dotColor: bothLive ? AppColors.accentGreen : Colors.orange,
+                  label: bothLive ? 'LIVE · $_eta' : 'CONNECTING',
+                  bg: Colors.white.withOpacity(0.92),
+                ),
+              ),
+
+              // ── Theme toggle top-right ──
+              Positioned(
+                right: 10,
+                top: 10,
+                child: _circleIconButton(
+                  icon: _mapTheme == MapThemeMode.dark
+                      ? Icons.dark_mode
+                      : (_mapTheme == MapThemeMode.light
+                            ? Icons.light_mode
+                            : Icons.map_rounded),
+                  onTap: _cycleTheme,
+                ),
+              ),
+
+              // ── Fit-to-screen below theme toggle ──
+              Positioned(
+                right: 10,
+                top: 52,
+                child: _circleIconButton(
+                  icon: Icons.fit_screen,
+                  onTap: _fitBothMarkers,
+                ),
+              ),
+
+              // ── Zoom controls bottom-right ──
+              Positioned(
+                bottom: 10,
+                right: 10,
+                child: Column(
+                  children: [
+                    _circleIconButton(
+                      icon: Icons.add,
+                      onTap: () => _mapController.move(
+                        _mapController.camera.center,
+                        _mapController.camera.zoom + 1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _circleIconButton(
+                      icon: Icons.remove,
+                      onTap: () => _mapController.move(
+                        _mapController.camera.center,
+                        _mapController.camera.zoom - 1,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ── ETA/distance label bottom-left ──
+              Positioned(
+                left: 10,
+                bottom: 10,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.92),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    _distance,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ),
+              ),
+
+              // ── No location warning ──
+              if (!_busConnected && !_studentConnected)
+                Positioned(
+                  bottom: 60,
+                  left: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.95),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.orange.withOpacity(0.4)),
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.wifi_off, color: Colors.orange, size: 16),
+                        SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Waiting for bus and student to share location...',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _circleIconButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(9),
+        decoration: BoxDecoration(
+          color: Colors.white.withOpacity(0.92),
+          shape: BoxShape.circle,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.08), blurRadius: 6),
+          ],
+        ),
+        child: Icon(icon, size: 18, color: AppColors.darkNavy),
       ),
     );
   }
 
   // ── BOTTOM INFO ──
   Widget _buildBottomInfo() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
-      child: Column(
-        children: [
-          Row(children: [
-            Expanded(child: _statBox('Distance', _distance, const Color(0xFFDCFCE7), const Color(0xFF16A34A))),
-            const SizedBox(width: 10),
-            Expanded(child: _statBox('ETA', _eta, const Color(0xFFEFF6FF), const Color(0xFF1D4ED8))),
-            const SizedBox(width: 10),
-            Expanded(child: _statBox(
-              'Status',
-              _busConnected ? 'Live' : 'Offline',
-              _busConnected ? const Color(0xFFDCFCE7) : const Color(0xFFFEF3C7),
-              _busConnected ? const Color(0xFF16A34A) : const Color(0xFFD97706),
-            )),
-          ]),
-          const SizedBox(height: 10),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.cardBg,
+          borderRadius: BorderRadius.circular(22),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: _statTile(
+                    value: _distance.replaceAll(' km', ''),
+                    unit: 'km',
+                    label: 'distance',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _statTile(
+                    value: _eta.replaceAll(' min', ''),
+                    unit: _eta.contains('min') ? 'min' : '',
+                    label: 'eta',
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _statTile(
+                    value: _busConnected ? 'LIVE' : 'OFF',
+                    unit: '',
+                    label: 'bus status',
+                    valueColor: _busConnected
+                        ? AppColors.accentGreen
+                        : AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
 
-          // Legend
-          Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-            Container(width: 10, height: 10,
-                decoration: const BoxDecoration(color: Color(0xFF4F46E5), shape: BoxShape.circle)),
-            const SizedBox(width: 4),
-            const Text('Bus', style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-            const SizedBox(width: 16),
-            Container(width: 10, height: 10,
-                decoration: const BoxDecoration(color: Color(0xFF16A34A), shape: BoxShape.circle)),
-            const SizedBox(width: 4),
-            const Text('Student', style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-            const SizedBox(width: 16),
-            const Text('— Route Line', style: TextStyle(fontSize: 11, color: Color(0xFF6B7280))),
-          ]),
+            // Legend
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: AppColors.accentGreen,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  'Bus',
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
+                const SizedBox(width: 16),
+                Container(
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                    border: Border.all(color: AppColors.accentGreen, width: 2),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                const Text(
+                  'Student',
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
+                const SizedBox(width: 16),
+                const Text(
+                  '— Route',
+                  style: TextStyle(fontSize: 11, color: AppColors.textMuted),
+                ),
+              ],
+            ),
 
-          const SizedBox(height: 8),
-          Text('Last updated: $_currentTime',
-              style: const TextStyle(fontSize: 11, color: Colors.grey)),
-        ],
+            const SizedBox(height: 10),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                _pillBadge(
+                  dotColor: AppColors.accentGreen,
+                  label: 'LIVE TRACKING',
+                  bg: AppColors.badgeBg,
+                  textColor: AppColors.darkNavy,
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  _updatedLabel(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _statBox(String label, String value, Color bg, Color valueColor) {
+  Widget _statTile({
+    required String value,
+    required String unit,
+    required String label,
+    Color? valueColor,
+  }) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(12)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
-        const SizedBox(height: 4),
-        Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: valueColor)),
-      ]),
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        color: AppColors.inputBg,
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Column(
+        children: [
+          RichText(
+            text: TextSpan(
+              children: [
+                TextSpan(
+                  text: value,
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: valueColor ?? AppColors.textPrimary,
+                  ),
+                ),
+                if (unit.isNotEmpty)
+                  TextSpan(
+                    text: ' $unit',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: AppColors.textMuted,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.textMuted),
+          ),
+        ],
+      ),
     );
   }
 }
