@@ -1,0 +1,69 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\hp\\Downloads\\SafeWayFront-main\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\lib\\Pages\\Parents\\Live_Bus_Tracker.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:SafeWayFront-main\\lib\\Pages\\Parents\\Live_Bus_Tracker.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\lib\\Pages\\Parents\\Parent_Dashboard.dart||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:SafeWayFront-main\\lib\\Pages\\Parents\\Parent_Dashboard.dart||{8B382828-6202-11D1-8870-0000F87579D2}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\pubspec.yaml||{8B382828-6202-11D1-8870-0000F87579D2}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:SafeWayFront-main\\pubspec.yaml||{8B382828-6202-11D1-8870-0000F87579D2}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Live_Bus_Tracker.dart",
+              "DocumentMoniker": "C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\lib\\Pages\\Parents\\Live_Bus_Tracker.dart",
+              "RelativeDocumentMoniker": "SafeWayFront-main\\lib\\Pages\\Parents\\Live_Bus_Tracker.dart",
+              "ToolTip": "C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\lib\\Pages\\Parents\\Live_Bus_Tracker.dart",
+              "RelativeToolTip": "SafeWayFront-main\\lib\\Pages\\Parents\\Live_Bus_Tracker.dart",
+              "ViewState": "AgIAADAAAAAAAAAAAAAAAA8AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-08-18T00:37:42.002Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "Parent_Dashboard.dart",
+              "DocumentMoniker": "C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\lib\\Pages\\Parents\\Parent_Dashboard.dart",
+              "RelativeDocumentMoniker": "SafeWayFront-main\\lib\\Pages\\Parents\\Parent_Dashboard.dart",
+              "ToolTip": "C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\lib\\Pages\\Parents\\Parent_Dashboard.dart",
+              "RelativeToolTip": "SafeWayFront-main\\lib\\Pages\\Parents\\Parent_Dashboard.dart",
+              "ViewState": "AgIAAN4BAAAAAAAAAAAmwP4BAAABAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001001|",
+              "WhenOpened": "2026-08-18T00:05:20.899Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "pubspec.yaml",
+              "DocumentMoniker": "C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\pubspec.yaml",
+              "RelativeDocumentMoniker": "SafeWayFront-main\\pubspec.yaml",
+              "ToolTip": "C:\\Users\\hp\\Downloads\\SafeWayFront-main\\SafeWayFront-main\\pubspec.yaml",
+              "RelativeToolTip": "SafeWayFront-main\\pubspec.yaml",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAABKAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003775|",
+              "WhenOpened": "2026-08-17T23:46:59.626Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,2813 @@
+// import 'dart:async';
+// import 'dart:convert';
+// import 'package:flutter/material.dart';
+// import 'package:flutter_map/flutter_map.dart';
+// import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+// import 'package:latlong2/latlong.dart';
+// import 'package:http/http.dart' as http;
+// import 'package:safeway/services/api_config.dart';
+// import 'package:safeway/services/location_service.dart';
+// import 'package:safeway/services/map_service.dart';
+// import 'package:safeway/Pages/Student/change_pickup_station_screen.dart';
+// import 'package:safeway/Pages/login_page.dart';
+// import 'package:safeway/Pages/Student/Request_Route_Change.dart';
+// import 'package:safeway/Pages/Student/Bus_Traker.dart';
+// import 'package:safeway/Pages/Student/Alerts_Page.dart';
+// import 'package:safeway/Pages/Student/Profile_Page.dart';
+
+// // ── Palette (matches the mockup) ──
+// class _Palette {
+//   static const bg = Color(0xFFF3F4F0);
+//   static const card = Color(0xFFFFFFFF);
+//   static const dark = Color(0xFF12181F);
+//   static const green = Color(0xFF1F6F54);
+//   static const greenBg = Color(0xFFBFE8D4);
+//   static const textPrimary = Color(0xFF14181C);
+//   static const textSecondary = Color(0xFF6B7280);
+//   static const textMuted = Color(0xFF9CA3AF);
+//   static const divider = Color(0xFFE5E7EB);
+//   static const avatar = Color(0xFFD98B72);
+//   static const orange = Color(0xFFE8734F);
+//   static const orangeBg = Color(0xFFFBDCD1);
+// }
+
+// // ── Models ──
+// class SubscriptionModel {
+//   final String status;
+//   final String startDate;
+//   final String endDate;
+//   SubscriptionModel({
+//     required this.status,
+//     required this.startDate,
+//     required this.endDate,
+//   });
+//   factory SubscriptionModel.fromJson(Map<String, dynamic> j) =>
+//       SubscriptionModel(
+//         status: j['status'],
+//         startDate: j['startDate'],
+//         endDate: j['endDate'],
+//       );
+// }
+
+// class StudentInfoModel {
+//   final String fullName;
+//   final String uniqueID;
+//   final String grade;
+//   final String busNumber;
+//   final String driverName;
+//   final String routeName;
+//   final String stopName;
+//   StudentInfoModel({
+//     required this.fullName,
+//     required this.uniqueID,
+//     required this.grade,
+//     required this.busNumber,
+//     required this.driverName,
+//     required this.routeName,
+//     required this.stopName,
+//   });
+//   factory StudentInfoModel.fromJson(Map<String, dynamic> j) => StudentInfoModel(
+//     fullName: j['fullName'] ?? '',
+//     uniqueID: j['uniqueID'] ?? '',
+//     grade: j['grade'] ?? '',
+//     busNumber: j['busNumber'] ?? 'Not assigned',
+//     driverName: j['driverName'] ?? 'Not assigned',
+//     routeName: j['routeName'] ?? 'Not assigned',
+//     stopName: j['stopName'] ?? 'Not assigned',
+//   );
+// }
+
+// class StudentDashboardScreen extends StatefulWidget {
+//   const StudentDashboardScreen({super.key});
+//   @override
+//   State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
+// }
+
+// class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+//   final _storage = const FlutterSecureStorage();
+
+//   // ── User ──
+//   int _userId = 0;
+//   StudentInfoModel? _studentInfo;
+//   bool _infoLoading = true;
+
+//   // ── Bus tracking ──
+//   LatLng _busLocation = const LatLng(24.7136, 46.6753);
+//   final LatLng _myStop = const LatLng(24.7200, 46.6800);
+//   List<LatLng> _routePoints = [];
+//   String _eta = 'Loading...';
+//   bool _isConnected = false;
+//   Timer? _refreshTimer;
+//   final MapController _mapController = MapController();
+
+//   // ── Subscription ──
+//   SubscriptionModel? _subscription;
+//   bool _subscriptionLoading = true;
+
+//   // ── Bottom nav (visual only for the tabs without a screen yet) ──
+//   int _selectedTab = 0;
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     _init();
+//   }
+
+//   @override
+//   void dispose() {
+//     _refreshTimer?.cancel();
+//     super.dispose();
+//   }
+
+//   Future<void> _init() async {
+//     // Start sharing student location to API
+//     LocationService.startStudentSharing();
+
+//     final userIdStr = await _storage.read(key: 'userId') ?? '0';
+//     final fullName = await _storage.read(key: 'fullName') ?? '';
+//     final uniqueID = await _storage.read(key: 'uniqueID') ?? '';
+
+//     print('🔑 userId from storage: $userIdStr');
+//     print('🔑 fullName from storage: $fullName');
+//     print('🔑 uniqueID from storage: $uniqueID');
+
+//     _userId = int.tryParse(userIdStr) ?? 0;
+
+//     if (_userId == 0) {
+//       print('⚠️ userId is 0 — login did not save userId correctly!');
+//       setState(() {
+//         _infoLoading = false;
+//         _subscriptionLoading = false;
+//       });
+//       return;
+//     }
+
+//     await Future.wait([_loadStudentInfo(), _loadSubscription()]);
+
+//     _fetchBusLocation();
+//     _refreshTimer = Timer.periodic(
+//       const Duration(seconds: 15),
+//       (_) => _fetchBusLocation(),
+//     );
+//   }
+
+//   // ── Load student info (name, bus, driver, route, stop) ──
+//   Future<void> _loadStudentInfo() async {
+//     try {
+//       final res = await http.get(
+//         Uri.parse('$apiBaseUrl/api/auth/student-info/$_userId'),
+//       );
+//       if (!mounted) return;
+//       if (res.statusCode == 200) {
+//         final info = StudentInfoModel.fromJson(jsonDecode(res.body));
+//         setState(() {
+//           _studentInfo = info;
+//           _infoLoading = false;
+//         });
+//       } else {
+//         setState(() => _infoLoading = false);
+//       }
+//     } catch (e) {
+//       print('StudentInfo error: $e');
+//       if (mounted) setState(() => _infoLoading = false);
+//     }
+//   }
+
+//   // ── Load subscription ──
+//   Future<void> _loadSubscription() async {
+//     if (_userId == 0) {
+//       setState(() => _subscriptionLoading = false);
+//       return;
+//     }
+//     try {
+//       final res = await http.get(
+//         Uri.parse('$apiBaseUrl/api/subscription/student/$_userId'),
+//       );
+//       if (!mounted) return;
+//       if (res.statusCode == 200) {
+//         setState(() {
+//           _subscription = SubscriptionModel.fromJson(jsonDecode(res.body));
+//           _subscriptionLoading = false;
+//         });
+//       } else {
+//         setState(() => _subscriptionLoading = false);
+//       }
+//     } catch (e) {
+//       print('Subscription error: $e');
+//       if (mounted) setState(() => _subscriptionLoading = false);
+//     }
+//   }
+
+//   // ── Fetch live bus location ──
+//   Future<void> _fetchBusLocation() async {
+//     final location = await LocationService.getStudentLocation();
+//     if (!mounted) return;
+
+//     if (location != null) {
+//       final newPos = LatLng(location['latitude']!, location['longitude']!);
+//       final distance = const Distance().as(LengthUnit.Meter, newPos, _myStop);
+//       final etaMins = (distance / 300).ceil(); // ~18 km/h speed
+
+//       setState(() {
+//         _busLocation = newPos;
+//         _eta = etaMins <= 1 ? 'Arriving!' : '$etaMins min';
+//         _isConnected = true;
+//       });
+
+//       MapService.fetchStreetRoute(newPos, _myStop).then((pts) {
+//         if (mounted) {
+//           setState(() {
+//             _routePoints = pts;
+//           });
+//         }
+//       });
+//     } else {
+//       if (mounted) setState(() => _isConnected = false);
+//     }
+//   }
+
+//   void _logout() {
+//     Navigator.of(context).pushAndRemoveUntil(
+//       MaterialPageRoute(builder: (context) => const LoginPage()),
+//       (Route<dynamic> route) => false,
+//     );
+//   }
+
+//   String _greetingLabel() {
+//     final hour = DateTime.now().hour;
+//     if (hour < 12) return 'GOOD MORNING';
+//     if (hour < 17) return 'GOOD AFTERNOON';
+//     return 'GOOD EVENING';
+//   }
+
+//   String _greetingSubtitle() {
+//     if (!_isConnected) return 'Waiting for your bus to start sharing location.';
+//     if (_eta == 'Arriving!') return 'Your bus is arriving now!';
+//     return 'Your bus is right on schedule.';
+//   }
+
+//   String _firstName() {
+//     final full = _studentInfo?.fullName ?? '';
+//     if (full.isEmpty) return 'there';
+//     return full.split(' ').first;
+//   }
+
+//   String _initials() {
+//     final full = _studentInfo?.fullName ?? '';
+//     if (full.trim().isEmpty) return '?';
+//     final parts = full.trim().split(RegExp(r'\s+'));
+//     final first = parts.first.isNotEmpty ? parts.first[0] : '';
+//     final last = parts.length > 1 && parts.last.isNotEmpty ? parts.last[0] : '';
+//     return (first + last).toUpperCase();
+//   }
+
+//   List<String> _activeAlerts() {
+//     final alerts = <String>[];
+//     if (!_isConnected) {
+//       alerts.add('Waiting for the driver to start sharing location.');
+//     }
+//     if (_subscription != null) {
+//       if (_subscription!.status == 'UNPAID') {
+//         alerts.add(
+//           'Your subscription is unpaid. Contact your parent or school admin.',
+//         );
+//       } else if (_subscription!.status == 'EXPIRED') {
+//         alerts.add(
+//           'Your subscription has expired. Please renew with your school admin.',
+//         );
+//       }
+//     }
+//     return alerts;
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final List<Widget> pages = [
+//       _buildHomeContent(),
+//       TrackBusScreen(
+//         busNumber: 'Bus #${_studentInfo?.busNumber ?? '101'}',
+//         routeName: _studentInfo?.routeName ?? 'Morning Route',
+//         myStop: _myStop,
+//         pickupStopName: _studentInfo?.stopName ?? 'Your Stop',
+//         pickupTime: '7:40 AM',
+//         arrivalStopName: 'Main Campus',
+//         arrivalTime: '8:15 AM',
+//         bottomNavigationBar: null,
+//       ),
+//       const AlertsPage(
+//         showBottomNav: false,
+//       ),
+//       ProfilePage(
+//         fullName: _studentInfo?.fullName ?? '',
+//         uniqueID: _studentInfo?.uniqueID ?? '',
+//         grade: _studentInfo?.grade ?? '',
+//         busNumber: _studentInfo?.busNumber ?? '',
+//         routeName: _studentInfo?.routeName ?? '',
+//         stopName: _studentInfo?.stopName ?? '',
+//         onLogout: _logout,
+//         bottomNavigationBar: null,
+//       ),
+//     ];
+
+//     return Scaffold(
+//       backgroundColor: _Palette.bg,
+//       body: IndexedStack(
+//         index: _selectedTab,
+//         children: pages,
+//       ),
+//       bottomNavigationBar: _buildBottomNav(),
+//     );
+//   }
+
+//   Widget _buildHomeContent() {
+//     return SafeArea(
+//       child: SingleChildScrollView(
+//         padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             _buildHeader(),
+//             const SizedBox(height: 24),
+//             _sectionLabel('YOUR NEXT TRIP'),
+//             const SizedBox(height: 8),
+//             _buildLiveTrackerCard(),
+//             const SizedBox(height: 28),
+//             _sectionLabel('YOUR ROUTE'),
+//             const SizedBox(height: 4),
+//             Row(
+//               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//               children: [
+//                 const Text(
+//                   "Today's stops",
+//                   style: TextStyle(
+//                     fontSize: 22,
+//                     fontWeight: FontWeight.bold,
+//                     color: _Palette.textPrimary,
+//                   ),
+//                 ),
+//                 GestureDetector(
+//                   onTap: () {}, // TODO: full stop list screen
+//                   child: const Text(
+//                     'See all',
+//                     style: TextStyle(
+//                       fontSize: 13,
+//                       color: _Palette.green,
+//                       fontWeight: FontWeight.w600,
+//                     ),
+//                   ),
+//                 ),
+//               ],
+//             ),
+//             const SizedBox(height: 12),
+//             _buildStopsCard(),
+//             const SizedBox(height: 28),
+//             _sectionLabel('QUICK ACTIONS'),
+//             const SizedBox(height: 4),
+//             const Text(
+//               'Make a request',
+//               style: TextStyle(
+//                 fontSize: 22,
+//                 fontWeight: FontWeight.bold,
+//                 color: _Palette.textPrimary,
+//               ),
+//             ),
+//             const SizedBox(height: 12),
+//             _buildQuickActions(),
+//             const SizedBox(height: 100), // room above the floating nav bar
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _sectionLabel(String text) {
+//     return Text(
+//       text,
+//       style: const TextStyle(
+//         fontSize: 11,
+//         letterSpacing: 1.0,
+//         fontWeight: FontWeight.w700,
+//         color: _Palette.green,
+//       ),
+//     );
+//   }
+
+//   // ── HEADER — greeting + bell + avatar ──
+//   Widget _buildHeader() {
+//     final alerts = _activeAlerts();
+
+//     return Row(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Expanded(
+//           child: Column(
+//             crossAxisAlignment: CrossAxisAlignment.start,
+//             children: [
+//               Text(
+//                 _greetingLabel(),
+//                 style: const TextStyle(
+//                   fontSize: 11,
+//                   letterSpacing: 1.0,
+//                   fontWeight: FontWeight.w700,
+//                   color: _Palette.green,
+//                 ),
+//               ),
+//               const SizedBox(height: 6),
+//               _infoLoading
+//                   ? Container(
+//                       width: 140,
+//                       height: 30,
+//                       decoration: BoxDecoration(
+//                         color: Colors.black12,
+//                         borderRadius: BorderRadius.circular(6),
+//                       ),
+//                     )
+//                   : Text(
+//                       'Hi, ${_firstName()}',
+//                       style: const TextStyle(
+//                         fontSize: 28,
+//                         fontWeight: FontWeight.bold,
+//                         color: _Palette.textPrimary,
+//                       ),
+//                     ),
+//               const SizedBox(height: 4),
+//               Text(
+//                 _greetingSubtitle(),
+//                 style: const TextStyle(
+//                   fontSize: 13,
+//                   color: _Palette.textSecondary,
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ),
+//         const SizedBox(width: 12),
+//         GestureDetector(
+//           onTap: () => setState(() => _selectedTab = 2),
+//           child: Stack(
+//             clipBehavior: Clip.none,
+//             children: [
+//               Container(
+//                 width: 44,
+//                 height: 44,
+//                 decoration: BoxDecoration(
+//                   color: Colors.white,
+//                   shape: BoxShape.circle,
+//                   boxShadow: [
+//                     BoxShadow(
+//                       color: Colors.black.withOpacity(0.05),
+//                       blurRadius: 8,
+//                       offset: const Offset(0, 2),
+//                     ),
+//                   ],
+//                 ),
+//                 child: const Icon(
+//                   Icons.notifications_none_rounded,
+//                   color: _Palette.textPrimary,
+//                   size: 22,
+//                 ),
+//               ),
+//               if (alerts.isNotEmpty)
+//                 Positioned(
+//                   right: 2,
+//                   top: 2,
+//                   child: Container(
+//                     width: 10,
+//                     height: 10,
+//                     decoration: const BoxDecoration(
+//                       color: Colors.red,
+//                       shape: BoxShape.circle,
+//                     ),
+//                   ),
+//                 ),
+//             ],
+//           ),
+//         ),
+//         const SizedBox(width: 10),
+//         GestureDetector(
+//           onTap: _showProfileSheet,
+//           child: Container(
+//             width: 44,
+//             height: 44,
+//             decoration: const BoxDecoration(
+//               color: _Palette.avatar,
+//               shape: BoxShape.circle,
+//             ),
+//             child: Center(
+//               child: Text(
+//                 _initials(),
+//                 style: const TextStyle(
+//                   color: Colors.white,
+//                   fontWeight: FontWeight.bold,
+//                   fontSize: 15,
+//                 ),
+//               ),
+//             ),
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+
+//   void _showAlertsPage() {
+//     Navigator.push(
+//       context,
+//       MaterialPageRoute(
+//         builder: (context) => const AlertsPage(showBottomNav: false),
+//       ),
+//     );
+//   }
+
+//   void _showProfileSheet() {
+//     showModalBottomSheet(
+//       context: context,
+//       backgroundColor: Colors.white,
+//       shape: const RoundedRectangleBorder(
+//         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+//       ),
+//       builder: (_) => Padding(
+//         padding: const EdgeInsets.all(20),
+//         child: Column(
+//           mainAxisSize: MainAxisSize.min,
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             Text(
+//               _studentInfo?.fullName ?? '',
+//               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+//             ),
+//             if ((_studentInfo?.uniqueID ?? '').isNotEmpty)
+//               Padding(
+//                 padding: const EdgeInsets.only(top: 4),
+//                 child: Text(
+//                   'ID: ${_studentInfo!.uniqueID}',
+//                   style: const TextStyle(color: _Palette.textSecondary),
+//                 ),
+//               ),
+//             const SizedBox(height: 16),
+//             ListTile(
+//               contentPadding: EdgeInsets.zero,
+//               leading: const Icon(Icons.logout, color: Colors.red),
+//               title: const Text(
+//                 'Logout',
+//                 style: TextStyle(
+//                   color: Colors.red,
+//                   fontWeight: FontWeight.w600,
+//                 ),
+//               ),
+//               onTap: () {
+//                 Navigator.pop(context);
+//                 _logout();
+//               },
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   // ── NEXT TRIP CARD ──
+//   Widget _buildLiveTrackerCard() {
+//     final routeName = _studentInfo?.routeName ?? 'Loading...';
+//     final busNumber = _studentInfo?.busNumber ?? '...';
+//     final stopName = _studentInfo?.stopName ?? '...';
+//     final routePts = _routePoints.isEmpty ? [_busLocation, _myStop] : _routePoints;
+
+//     final String badgeText = !_isConnected
+//         ? 'OFFLINE'
+//         : (_eta == 'Arriving!' ? 'ARRIVING' : 'ON TIME');
+//     final Color badgeColor = !_isConnected
+//         ? _Palette.textMuted
+//         : _Palette.green;
+//     final Color badgeBg = !_isConnected
+//         ? const Color(0xFFE5E7EB)
+//         : _Palette.greenBg;
+
+//     return Container(
+//       padding: const EdgeInsets.all(16),
+//       decoration: BoxDecoration(
+//         color: _Palette.card,
+//         borderRadius: BorderRadius.circular(22),
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.black.withOpacity(0.04),
+//             blurRadius: 16,
+//             offset: const Offset(0, 6),
+//           ),
+//         ],
+//       ),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Row(
+//             mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//             children: [
+//               Expanded(
+//                 child: Text(
+//                   'Route $routeName',
+//                   style: const TextStyle(
+//                     fontSize: 17,
+//                     fontWeight: FontWeight.bold,
+//                     color: _Palette.textPrimary,
+//                   ),
+//                 ),
+//               ),
+//               Container(
+//                 padding: const EdgeInsets.symmetric(
+//                   horizontal: 10,
+//                   vertical: 5,
+//                 ),
+//                 decoration: BoxDecoration(
+//                   color: badgeBg,
+//                   borderRadius: BorderRadius.circular(20),
+//                 ),
+//                 child: Row(
+//                   mainAxisSize: MainAxisSize.min,
+//                   children: [
+//                     Container(
+//                       width: 6,
+//                       height: 6,
+//                       decoration: BoxDecoration(
+//                         color: badgeColor,
+//                         shape: BoxShape.circle,
+//                       ),
+//                     ),
+//                     const SizedBox(width: 5),
+//                     Text(
+//                       badgeText,
+//                       style: TextStyle(
+//                         fontSize: 10,
+//                         fontWeight: FontWeight.w700,
+//                         color: badgeColor,
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 14),
+//           Row(
+//             children: [
+//               Expanded(
+//                 child: _tripStat(
+//                   Icons.directions_bus_rounded,
+//                   busNumber,
+//                   'Your bus',
+//                 ),
+//               ),
+//               Expanded(
+//                 child: _tripStat(Icons.access_time_rounded, _eta, 'Away'),
+//               ),
+//               Expanded(
+//                 child: _tripStat(
+//                   Icons.location_on_outlined,
+//                   stopName,
+//                   'Next stop',
+//                 ),
+//               ),
+//             ],
+//           ),
+//           const SizedBox(height: 14),
+//           ClipRRect(
+//             borderRadius: BorderRadius.circular(16),
+//             child: Stack(
+//               children: [
+//                 SizedBox(
+//                   height: 170,
+//                   child: FlutterMap(
+//                     mapController: _mapController,
+//                     options: MapOptions(
+//                       initialCenter: _busLocation,
+//                       initialZoom: 14.0,
+//                       interactionOptions: const InteractionOptions(
+//                         flags: InteractiveFlag.all,
+//                       ),
+//                     ),
+//                     children: [
+//                       TileLayer(
+//                         urlTemplate: MapService.cartoVoyager,
+//                         subdomains: MapService.subdomains,
+//                         userAgentPackageName: 'com.example.safeway',
+//                         maxZoom: 19,
+//                       ),
+//                       PolylineLayer(
+//                         polylines: [
+//                           Polyline(
+//                             points: routePts,
+//                             strokeWidth: 7.0,
+//                             color: _Palette.green.withOpacity(0.3),
+//                           ),
+//                           Polyline(
+//                             points: routePts,
+//                             strokeWidth: 3.5,
+//                             color: _Palette.green,
+//                           ),
+//                         ],
+//                       ),
+//                       MarkerLayer(
+//                         markers: [
+//                           Marker(
+//                             point: _busLocation,
+//                             width: 90,
+//                             height: 70,
+//                             child: MapService.buildBusMarker(
+//                               busCode: 'BUS',
+//                               isLive: _isConnected,
+//                             ),
+//                           ),
+//                           Marker(
+//                             point: _myStop,
+//                             width: 90,
+//                             height: 70,
+//                             child: MapService.buildStudentMarker(
+//                               label: 'Stop',
+//                               isLive: true,
+//                             ),
+//                           ),
+//                         ],
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//                 Positioned(
+//                   left: 10,
+//                   top: 10,
+//                   child: Container(
+//                     padding: const EdgeInsets.symmetric(
+//                       horizontal: 10,
+//                       vertical: 5,
+//                     ),
+//                     decoration: BoxDecoration(
+//                       color: Colors.white.withOpacity(0.9),
+//                       borderRadius: BorderRadius.circular(20),
+//                     ),
+//                     child: Row(
+//                       mainAxisSize: MainAxisSize.min,
+//                       children: [
+//                         Container(
+//                           width: 6,
+//                           height: 6,
+//                           decoration: BoxDecoration(
+//                             color: _isConnected
+//                                 ? _Palette.green
+//                                 : Colors.orange,
+//                             shape: BoxShape.circle,
+//                           ),
+//                         ),
+//                         const SizedBox(width: 5),
+//                         Text(
+//                           _isConnected ? 'LIVE · $_eta' : 'CONNECTING',
+//                           style: const TextStyle(
+//                             fontSize: 10,
+//                             fontWeight: FontWeight.w700,
+//                             color: _Palette.textPrimary,
+//                           ),
+//                         ),
+//                       ],
+//                     ),
+//                   ),
+//                 ),
+//               ],
+//             ),
+//           ),
+//           const SizedBox(height: 16),
+//           Row(
+//             children: [
+//               Expanded(
+//                 child: Column(
+//                   crossAxisAlignment: CrossAxisAlignment.start,
+//                   children: [
+//                     const Text(
+//                       'ARRIVAL AT YOUR STOP',
+//                       style: TextStyle(
+//                         fontSize: 10,
+//                         letterSpacing: 0.6,
+//                         fontWeight: FontWeight.w700,
+//                         color: _Palette.textMuted,
+//                       ),
+//                     ),
+//                     const SizedBox(height: 2),
+//                     Text(
+//                       _eta == 'Loading...' ? '--:--' : _eta,
+//                       style: const TextStyle(
+//                         fontSize: 20,
+//                         fontWeight: FontWeight.bold,
+//                         color: _Palette.textPrimary,
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+//               ElevatedButton(
+//                 onPressed: _openFullMap,
+//                 style: ElevatedButton.styleFrom(
+//                   backgroundColor: _Palette.dark,
+//                   padding: const EdgeInsets.symmetric(
+//                     horizontal: 22,
+//                     vertical: 16,
+//                   ),
+//                   shape: RoundedRectangleBorder(
+//                     borderRadius: BorderRadius.circular(28),
+//                   ),
+//                   elevation: 0,
+//                 ),
+//                 child: const Row(
+//                   mainAxisSize: MainAxisSize.min,
+//                   children: [
+//                     Text(
+//                       'Track bus',
+//                       style: TextStyle(
+//                         color: Colors.white,
+//                         fontWeight: FontWeight.w600,
+//                         fontSize: 14,
+//                       ),
+//                     ),
+//                     SizedBox(width: 6),
+//                     Icon(Icons.arrow_forward, color: Colors.white, size: 16),
+//                   ],
+//                 ),
+//               ),
+//             ],
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _tripStat(IconData icon, String value, String label) {
+//     return Column(
+//       crossAxisAlignment: CrossAxisAlignment.start,
+//       children: [
+//         Icon(icon, size: 16, color: _Palette.textPrimary),
+//         const SizedBox(height: 6),
+//         Text(
+//           value,
+//           overflow: TextOverflow.ellipsis,
+//           style: const TextStyle(
+//             fontSize: 13,
+//             fontWeight: FontWeight.bold,
+//             color: _Palette.textPrimary,
+//           ),
+//         ),
+//         Text(
+//           label,
+//           style: const TextStyle(fontSize: 11, color: _Palette.textMuted),
+//         ),
+//       ],
+//     );
+//   }
+
+//   void _openFullMap() {
+//     Navigator.push(
+//       context,
+//       MaterialPageRoute(
+//         builder: (context) => TrackBusScreen(
+//           busNumber: 'Bus #${_studentInfo?.busNumber ?? '101'}',
+//           routeName: _studentInfo?.routeName ?? 'Morning Route',
+//           myStop: _myStop,
+//           pickupStopName: _studentInfo?.stopName ?? 'Your Stop',
+//           pickupTime: '7:40 AM',
+//           arrivalStopName: 'Main Campus',
+//           arrivalTime: '8:15 AM',
+//           // driverPhone: _studentInfo?.stopName,
+//         ),
+//       ),
+//     );
+//   }
+
+//   // ── STOPS TIMELINE CARD ──
+//   Widget _buildStopsCard() {
+//     // First two stops are illustrative; the middle one reflects the
+//     // student's real assigned stop from the database.
+//     final myStop = _studentInfo?.stopName ?? 'Your Stop';
+
+//     return Container(
+//       padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+//       decoration: BoxDecoration(
+//         color: _Palette.card,
+//         borderRadius: BorderRadius.circular(22),
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.black.withOpacity(0.04),
+//             blurRadius: 16,
+//             offset: const Offset(0, 6),
+//           ),
+//         ],
+//       ),
+//       child: Column(
+//         children: [
+//           _stopRow(
+//             name: 'Imperial Park',
+//             time: '07:30 AM',
+//             status: _StopStatus.passed,
+//             isFirst: true,
+//           ),
+//           _stopRow(name: myStop, time: '07:45 AM', status: _StopStatus.current),
+//           _stopRow(
+//             name: 'Cedar Grove School',
+//             time: '08:00 AM',
+//             status: _StopStatus.upcoming,
+//             isLast: true,
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _stopRow({
+//     required String name,
+//     required String time,
+//     required _StopStatus status,
+//     bool isFirst = false,
+//     bool isLast = false,
+//   }) {
+//     final bool isCurrent = status == _StopStatus.current;
+
+//     return Padding(
+//       padding: const EdgeInsets.symmetric(vertical: 12),
+//       child: IntrinsicHeight(
+//         child: Row(
+//           crossAxisAlignment: CrossAxisAlignment.stretch,
+//           children: [
+//             SizedBox(
+//               width: 24,
+//               child: Column(
+//                 children: [
+//                   Expanded(
+//                     child: isFirst
+//                         ? const SizedBox()
+//                         : Container(width: 2, color: _Palette.divider),
+//                   ),
+//                   Container(
+//                     width: 14,
+//                     height: 14,
+//                     decoration: BoxDecoration(
+//                       shape: BoxShape.circle,
+//                       color: isCurrent ? _Palette.green : Colors.white,
+//                       border: Border.all(
+//                         color: isCurrent ? _Palette.green : _Palette.divider,
+//                         width: 2,
+//                       ),
+//                     ),
+//                     child: isCurrent
+//                         ? const Icon(Icons.circle, size: 6, color: Colors.white)
+//                         : null,
+//                   ),
+//                   Expanded(
+//                     child: isLast
+//                         ? const SizedBox()
+//                         : Container(width: 2, color: _Palette.divider),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//             const SizedBox(width: 12),
+//             Expanded(
+//               child: Column(
+//                 crossAxisAlignment: CrossAxisAlignment.start,
+//                 mainAxisAlignment: MainAxisAlignment.center,
+//                 children: [
+//                   Text(
+//                     name,
+//                     style: TextStyle(
+//                       fontSize: 14,
+//                       fontWeight: FontWeight.w600,
+//                       color: status == _StopStatus.passed
+//                           ? _Palette.textMuted
+//                           : _Palette.textPrimary,
+//                     ),
+//                   ),
+//                   const SizedBox(height: 2),
+//                   Text(
+//                     time,
+//                     style: const TextStyle(
+//                       fontSize: 12,
+//                       color: _Palette.textMuted,
+//                     ),
+//                   ),
+//                 ],
+//               ),
+//             ),
+//             _statusPill(status),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget _statusPill(_StopStatus status) {
+//     late String label;
+//     late Color fg;
+//     Color? bg;
+//     switch (status) {
+//       case _StopStatus.passed:
+//         label = 'PASSED';
+//         fg = const Color.fromARGB(255, 19, 70, 53);
+//         bg = null;
+//         break;
+//       case _StopStatus.current:
+//         label = 'YOUR STOP';
+//         fg = const Color(0xFF1F6F54);
+//         bg = _Palette.greenBg;
+//         break;
+//       case _StopStatus.upcoming:
+//         label = 'UP NEXT';
+//         fg = _Palette.textMuted;
+//         bg = null;
+//         break;
+//     }
+//     if (bg == null) {
+//       return Text(
+//         label,
+//         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: fg),
+//       );
+//     }
+//     return Container(
+//       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+//       decoration: BoxDecoration(
+//         color: bg,
+//         borderRadius: BorderRadius.circular(20),
+//       ),
+//       child: Text(
+//         label,
+//         style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: fg),
+//       ),
+//     );
+//   }
+
+//   // ── QUICK ACTIONS ──
+//   Widget _buildQuickActions() {
+//     return Row(
+//       children: [
+//         Expanded(
+//           child: _quickActionTile(
+//             icon: Icons.location_on_outlined,
+//             label: 'Pickup station',
+//             iconColor: _Palette.green,
+//             iconBg: _Palette.greenBg,
+//             onTap: () => Navigator.push(
+//               context,
+//               MaterialPageRoute(
+//                 builder: (_) => const ChangePickupStationScreen(),
+//               ),
+//             ),
+//           ),
+//         ),
+//         const SizedBox(width: 12),
+//         Expanded(
+//           child: _quickActionTile(
+//             icon: Icons.swap_horiz_rounded,
+//             label: 'Change route',
+//             iconColor: _Palette.orange,
+//             iconBg: _Palette.orangeBg,
+//             onTap: () => Navigator.push(
+//               context,
+//               MaterialPageRoute(builder: (_) => const RequestRouteChangePage()),
+//             ),
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+
+//   Widget _quickActionTile({
+//     required IconData icon,
+//     required String label,
+//     required Color iconColor,
+//     required Color iconBg,
+//     required VoidCallback onTap,
+//   }) {
+//     return GestureDetector(
+//       onTap: onTap,
+//       behavior: HitTestBehavior.opaque,
+//       child: Container(
+//         padding: const EdgeInsets.all(14),
+//         decoration: BoxDecoration(
+//           color: _Palette.card,
+//           borderRadius: BorderRadius.circular(18),
+//           boxShadow: [
+//             BoxShadow(
+//               color: Colors.black.withOpacity(0.03),
+//               blurRadius: 10,
+//               offset: const Offset(0, 4),
+//             ),
+//           ],
+//         ),
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             Row(
+//               mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//               children: [
+//                 Container(
+//                   width: 34,
+//                   height: 34,
+//                   decoration: BoxDecoration(
+//                     color: iconBg,
+//                     borderRadius: BorderRadius.circular(10),
+//                   ),
+//                   child: Icon(icon, color: iconColor, size: 18),
+//                 ),
+//                 const Icon(
+//                   Icons.north_east_rounded,
+//                   size: 16,
+//                   color: _Palette.textMuted,
+//                 ),
+//               ],
+//             ),
+//             const SizedBox(height: 20),
+//             Text(
+//               label,
+//               style: const TextStyle(
+//                 fontSize: 13,
+//                 fontWeight: FontWeight.w600,
+//                 color: _Palette.textPrimary,
+//               ),
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   // ── BOTTOM NAV (Matches mockup style) ──
+//   Widget _buildBottomNav() {
+//     return Container(
+//       margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+//       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+//       decoration: BoxDecoration(
+//         color: Colors.white,
+//         borderRadius: BorderRadius.circular(36),
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.black.withOpacity(0.08),
+//             blurRadius: 20,
+//             offset: const Offset(0, 8),
+//           ),
+//         ],
+//       ),
+//       child: Row(
+//         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+//         children: [
+//           _navItem(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
+//           _navItem(1, Icons.near_me_outlined, Icons.near_me, 'Track'),
+//           _navItem(2, Icons.notifications_none_rounded, Icons.notifications_rounded, 'Alerts'),
+//           _navItem(3, Icons.person_outline_rounded, Icons.person_rounded, 'Profile'),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _navItem(int index, IconData icon, IconData activeIcon, String label) {
+//     final bool active = _selectedTab == index;
+//     return GestureDetector(
+//       onTap: () {
+//         setState(() => _selectedTab = index);
+//       },
+//       behavior: HitTestBehavior.opaque,
+//       child: AnimatedContainer(
+//         duration: const Duration(milliseconds: 550),
+//         curve: Curves.fastOutSlowIn,
+//         padding: active
+//             ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+//             : const EdgeInsets.all(12),
+//         decoration: BoxDecoration(
+//           color: active ? const Color(0xFFC7EBD9) : const Color(0xFFF5F6F8),
+//           borderRadius: BorderRadius.circular(20),
+//         ),
+//         child: AnimatedSize(
+//           duration: const Duration(milliseconds: 500),
+//           curve: Curves.fastLinearToSlowEaseIn,
+//           child: Row(
+//             mainAxisSize: MainAxisSize.min,
+//             children: [
+//               AnimatedSwitcher(
+//                 duration: const Duration(milliseconds: 350),
+//                 switchInCurve: Curves.easeOutBack,
+//                 switchOutCurve: Curves.easeInBack,
+//                 transitionBuilder: (child, anim) => FadeTransition(
+//                   opacity: anim,
+//                   child: ScaleTransition(scale: anim, child: child),
+//                 ),
+//                 child: Icon(
+//                   active ? activeIcon : icon,
+//                   key: ValueKey(active ? activeIcon : icon),
+//                   size: 22,
+//                   color: _Palette.green,
+//                 ),
+//               ),
+//               if (active) ...[
+//                 const SizedBox(width: 8),
+//                 Text(
+//                   label,
+//                   maxLines: 1,
+//                   style: const TextStyle(
+//                     fontSize: 13,
+//                     fontWeight: FontWeight.bold,
+//                     color: _Palette.green,
+//                   ),
+//                 ),
+//               ],
+//             ],
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+// }
+
+// enum _StopStatus { passed, current, upcoming }
+import 'dart:async';
+import 'dart:convert';
+import 'dart:ui' show ImageFilter;
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:http/http.dart' as http;
+import 'package:safeway/services/api_config.dart';
+import 'package:safeway/services/location_service.dart';
+import 'package:safeway/services/map_service.dart';
+import 'package:safeway/Pages/Student/change_pickup_station_screen.dart';
+import 'package:safeway/Pages/login_page.dart';
+import 'package:safeway/Pages/Student/Request_Route_Change.dart';
+import 'package:safeway/Pages/Student/Bus_Traker.dart';
+import 'package:safeway/Pages/Student/Alerts_Page.dart';
+import 'package:safeway/Pages/Student/Profile_Page.dart';
+
+// ─────────────────────────────────────────────────────────────
+//  SafeWay design system — dark glass + red accent
+// ─────────────────────────────────────────────────────────────
+class _Palette {
+  // Backgrounds
+  static const bg = Color(0xFF070708);
+  static const bg2 = Color(0xFF101012);
+  static const surface = Color(0xFF18181B);
+
+  // Reds
+  static const red = Color(0xFFD32F2F);
+  static const brightRed = Color(0xFFEF4444);
+  static const darkRed = Color(0xFF991B1B);
+  static const burgundy = Color(0xFF65171B);
+
+  // Text
+  static const textPrimary = Color(0xFFF5F5F5);
+  static const textSecondary = Color(0xFFB8B8BC);
+  static const textMuted = Color(0xFF77777D);
+
+  // Glass
+  static const glassFill = Color(0x14FFFFFF); // white @ 8%
+  static const glassFillSoft = Color(0x08FFFFFF); // white @ 3%
+  static const glassBorder = Color(0x1AFFFFFF); // white @ 10%
+  static const divider = Color(0x1AFFFFFF);
+
+  // Primary CTA gradient
+  static const redGradient = LinearGradient(
+    begin: Alignment.centerLeft,
+    end: Alignment.centerRight,
+    colors: [darkRed, red],
+  );
+}
+
+// Dark map tiles so the map matches the dark UI (No API key required, no watermark).
+const String _darkTiles = MapService.esriDark;
+
+// ─────────────────────────────────────────────────────────────
+//  Reusable UI building blocks
+// ─────────────────────────────────────────────────────────────
+
+/// Soft red / burgundy glows over a dark gradient.
+class _AmbientBackground extends StatelessWidget {
+  const _AmbientBackground();
+
+  Widget _glow(double size, Color color, double opacity) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [color.withOpacity(opacity), color.withOpacity(0)],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [_Palette.bg2, _Palette.bg, _Palette.bg],
+              stops: [0.0, 0.55, 1.0],
+            ),
+          ),
+        ),
+        Positioned(top: -140, right: -110, child: _glow(340, _Palette.red, 0.24)),
+        Positioned(
+          top: 420,
+          left: -170,
+          child: _glow(360, _Palette.burgundy, 0.38),
+        ),
+      ],
+    );
+  }
+}
+
+/// Frosted-glass container.
+class _Glass extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double radius;
+  final bool glow;
+
+  const _Glass({
+    required this.child,
+    this.padding = const EdgeInsets.all(16),
+    this.radius = 24,
+    this.glow = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final r = BorderRadius.circular(radius);
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: r,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.35),
+            blurRadius: 24,
+            offset: const Offset(0, 10),
+          ),
+          if (glow)
+            BoxShadow(
+              color: _Palette.red.withOpacity(0.14),
+              blurRadius: 32,
+              spreadRadius: -6,
+            ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: r,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: padding,
+            decoration: BoxDecoration(
+              borderRadius: r,
+              gradient: const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [_Palette.glassFill, _Palette.glassFillSoft],
+              ),
+              border: Border.all(color: _Palette.glassBorder),
+            ),
+            child: child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Primary CTA — SafeWay red gradient with soft glow.
+class _RedButton extends StatelessWidget {
+  final String label;
+  final IconData? icon;
+  final VoidCallback onPressed;
+
+  const _RedButton({required this.label, required this.onPressed, this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: _Palette.redGradient,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: _Palette.red.withOpacity(0.38),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onPressed,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                if (icon != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(icon, color: Colors.white, size: 16),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Models ──
+class SubscriptionModel {
+  final String status;
+  final String startDate;
+  final String endDate;
+  SubscriptionModel({
+    required this.status,
+    required this.startDate,
+    required this.endDate,
+  });
+  factory SubscriptionModel.fromJson(Map<String, dynamic> j) =>
+      SubscriptionModel(
+        status: j['status'],
+        startDate: j['startDate'],
+        endDate: j['endDate'],
+      );
+}
+
+class StudentInfoModel {
+  final String fullName;
+  final String uniqueID;
+  final String grade;
+  final String busNumber;
+  final String driverName;
+  final String routeName;
+  final String stopName;
+  StudentInfoModel({
+    required this.fullName,
+    required this.uniqueID,
+    required this.grade,
+    required this.busNumber,
+    required this.driverName,
+    required this.routeName,
+    required this.stopName,
+  });
+  factory StudentInfoModel.fromJson(Map<String, dynamic> j) => StudentInfoModel(
+    fullName: j['fullName'] ?? '',
+    uniqueID: j['uniqueID'] ?? '',
+    grade: j['grade'] ?? '',
+    busNumber: j['busNumber'] ?? 'Not assigned',
+    driverName: j['driverName'] ?? 'Not assigned',
+    routeName: j['routeName'] ?? 'Not assigned',
+    stopName: j['stopName'] ?? 'Not assigned',
+  );
+}
+
+class StudentDashboardScreen extends StatefulWidget {
+  const StudentDashboardScreen({super.key});
+  @override
+  State<StudentDashboardScreen> createState() => _StudentDashboardScreenState();
+}
+
+class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
+  final _storage = const FlutterSecureStorage();
+
+  // ── User ──
+  int _userId = 0;
+  StudentInfoModel? _studentInfo;
+  bool _infoLoading = true;
+
+  // ── Bus tracking ──
+  LatLng _busLocation = const LatLng(24.7136, 46.6753);
+  final LatLng _myStop = const LatLng(24.7200, 46.6800);
+  List<LatLng> _routePoints = [];
+  String _eta = 'Loading...';
+  bool _isConnected = false;
+  Timer? _refreshTimer;
+  final MapController _mapController = MapController();
+
+  // ── Subscription ──
+  SubscriptionModel? _subscription;
+  bool _subscriptionLoading = true;
+
+  // ── Bottom nav (visual only for the tabs without a screen yet) ──
+  int _selectedTab = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _init();
+  }
+
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> _init() async {
+    // Start sharing student location to API
+    LocationService.startStudentSharing();
+
+    final userIdStr = await _storage.read(key: 'userId') ?? '0';
+    final fullName = await _storage.read(key: 'fullName') ?? '';
+    final uniqueID = await _storage.read(key: 'uniqueID') ?? '';
+
+    print('🔑 userId from storage: $userIdStr');
+    print('🔑 fullName from storage: $fullName');
+    print('🔑 uniqueID from storage: $uniqueID');
+
+    _userId = int.tryParse(userIdStr) ?? 0;
+
+    if (_userId == 0) {
+      print('⚠️ userId is 0 — login did not save userId correctly!');
+      setState(() {
+        _infoLoading = false;
+        _subscriptionLoading = false;
+      });
+      return;
+    }
+
+    await Future.wait([_loadStudentInfo(), _loadSubscription()]);
+
+    _fetchBusLocation();
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _fetchBusLocation(),
+    );
+  }
+
+  // ── Load student info (name, bus, driver, route, stop) ──
+  Future<void> _loadStudentInfo() async {
+    try {
+      final res = await http.get(
+        Uri.parse('$apiBaseUrl/api/auth/student-info/$_userId'),
+      );
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        final info = StudentInfoModel.fromJson(jsonDecode(res.body));
+        setState(() {
+          _studentInfo = info;
+          _infoLoading = false;
+        });
+      } else {
+        setState(() => _infoLoading = false);
+      }
+    } catch (e) {
+      print('StudentInfo error: $e');
+      if (mounted) setState(() => _infoLoading = false);
+    }
+  }
+
+  // ── Load subscription ──
+  Future<void> _loadSubscription() async {
+    if (_userId == 0) {
+      setState(() => _subscriptionLoading = false);
+      return;
+    }
+    try {
+      final res = await http.get(
+        Uri.parse('$apiBaseUrl/api/subscription/student/$_userId'),
+      );
+      if (!mounted) return;
+      if (res.statusCode == 200) {
+        setState(() {
+          _subscription = SubscriptionModel.fromJson(jsonDecode(res.body));
+          _subscriptionLoading = false;
+        });
+      } else {
+        setState(() => _subscriptionLoading = false);
+      }
+    } catch (e) {
+      print('Subscription error: $e');
+      if (mounted) setState(() => _subscriptionLoading = false);
+    }
+  }
+
+  // ── Fetch live bus location ──
+  Future<void> _fetchBusLocation() async {
+    final location = await LocationService.getStudentLocation();
+    if (!mounted) return;
+
+    if (location != null) {
+      final newPos = LatLng(location['latitude']!, location['longitude']!);
+      final distance = const Distance().as(LengthUnit.Meter, newPos, _myStop);
+      final etaMins = (distance / 300).ceil(); // ~18 km/h speed
+
+      setState(() {
+        _busLocation = newPos;
+        _eta = etaMins <= 1 ? 'Arriving!' : '$etaMins min';
+        _isConnected = true;
+      });
+
+      MapService.fetchStreetRoute(newPos, _myStop).then((pts) {
+        if (mounted) {
+          setState(() {
+            _routePoints = pts;
+          });
+        }
+      });
+    } else {
+      if (mounted) setState(() => _isConnected = false);
+    }
+  }
+
+  void _logout() {
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (context) => const LoginPage()),
+      (Route<dynamic> route) => false,
+    );
+  }
+
+  String _greetingLabel() {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'GOOD MORNING';
+    if (hour < 17) return 'GOOD AFTERNOON';
+    return 'GOOD EVENING';
+  }
+
+  String _greetingSubtitle() {
+    if (!_isConnected) return 'Waiting for your bus to start sharing location.';
+    if (_eta == 'Arriving!') return 'Your bus is arriving now!';
+    return 'Your bus is right on schedule.';
+  }
+
+  String _firstName() {
+    final full = _studentInfo?.fullName ?? '';
+    if (full.isEmpty) return 'there';
+    return full.split(' ').first;
+  }
+
+  String _initials() {
+    final full = _studentInfo?.fullName ?? '';
+    if (full.trim().isEmpty) return '?';
+    final parts = full.trim().split(RegExp(r'\s+'));
+    final first = parts.first.isNotEmpty ? parts.first[0] : '';
+    final last = parts.length > 1 && parts.last.isNotEmpty ? parts.last[0] : '';
+    return (first + last).toUpperCase();
+  }
+
+  List<String> _activeAlerts() {
+    final alerts = <String>[];
+    if (!_isConnected) {
+      alerts.add('Waiting for the driver to start sharing location.');
+    }
+    if (_subscription != null) {
+      if (_subscription!.status == 'UNPAID') {
+        alerts.add(
+          'Your subscription is unpaid. Contact your parent or school admin.',
+        );
+      } else if (_subscription!.status == 'EXPIRED') {
+        alerts.add(
+          'Your subscription has expired. Please renew with your school admin.',
+        );
+      }
+    }
+    return alerts;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final List<Widget> pages = [
+      _buildHomeContent(),
+      TrackBusScreen(
+        busNumber: 'Bus #${_studentInfo?.busNumber ?? '101'}',
+        routeName: _studentInfo?.routeName ?? 'Morning Route',
+        myStop: _myStop,
+        pickupStopName: _studentInfo?.stopName ?? 'Your Stop',
+        pickupTime: '7:40 AM',
+        arrivalStopName: 'Main Campus',
+        arrivalTime: '8:15 AM',
+        bottomNavigationBar: null,
+      ),
+      const AlertsPage(
+        showBottomNav: false,
+      ),
+      ProfilePage(
+        fullName: _studentInfo?.fullName ?? '',
+        uniqueID: _studentInfo?.uniqueID ?? '',
+        grade: _studentInfo?.grade ?? '',
+        busNumber: _studentInfo?.busNumber ?? '',
+        routeName: _studentInfo?.routeName ?? '',
+        stopName: _studentInfo?.stopName ?? '',
+        onLogout: _logout,
+        bottomNavigationBar: null,
+      ),
+    ];
+
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: _Palette.bg,
+        body: Stack(
+          children: [
+            const Positioned.fill(child: _AmbientBackground()),
+            Positioned.fill(
+              child: IndexedStack(
+                index: _selectedTab,
+                children: pages,
+              ),
+            ),
+          ],
+        ),
+        bottomNavigationBar: _buildBottomNav(),
+      ),
+    );
+  }
+
+  Widget _buildHomeContent() {
+    return SafeArea(
+      child: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(),
+            const SizedBox(height: 28),
+            _sectionLabel('YOUR NEXT TRIP'),
+            const SizedBox(height: 10),
+            _buildLiveTrackerCard(),
+            const SizedBox(height: 32),
+            _sectionLabel('YOUR ROUTE'),
+            const SizedBox(height: 6),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  "Today's stops",
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.3,
+                    color: _Palette.textPrimary,
+                  ),
+                ),
+                GestureDetector(
+                  onTap: () {}, // TODO: full stop list screen
+                  child: const Text(
+                    'See all',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: _Palette.brightRed,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            _buildStopsCard(),
+            const SizedBox(height: 32),
+            _sectionLabel('QUICK ACTIONS'),
+            const SizedBox(height: 6),
+            const Text(
+              'Make a request',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.3,
+                color: _Palette.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 14),
+            _buildQuickActions(),
+            const SizedBox(height: 100), // room above the floating nav bar
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        letterSpacing: 1.4,
+        fontWeight: FontWeight.w700,
+        color: _Palette.brightRed,
+      ),
+    );
+  }
+
+  // ── HEADER — greeting + bell + avatar ──
+  Widget _buildHeader() {
+    final alerts = _activeAlerts();
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _greetingLabel(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  letterSpacing: 1.4,
+                  fontWeight: FontWeight.w700,
+                  color: _Palette.brightRed,
+                ),
+              ),
+              const SizedBox(height: 8),
+              _infoLoading
+                  ? Container(
+                      width: 150,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    )
+                  : Text(
+                      'Hi, ${_firstName()}',
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.6,
+                        color: _Palette.textPrimary,
+                      ),
+                    ),
+              const SizedBox(height: 6),
+              Text(
+                _greetingSubtitle(),
+                style: const TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: _Palette.textSecondary,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        GestureDetector(
+          onTap: () => setState(() => _selectedTab = 2),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: _Palette.glassFill,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: _Palette.glassBorder),
+                ),
+                child: const Icon(
+                  Icons.notifications_none_rounded,
+                  color: _Palette.textPrimary,
+                  size: 22,
+                ),
+              ),
+              if (alerts.isNotEmpty)
+                Positioned(
+                  right: 3,
+                  top: 3,
+                  child: Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: _Palette.brightRed,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: _Palette.bg, width: 1.5),
+                      boxShadow: [
+                        BoxShadow(
+                          color: _Palette.brightRed.withOpacity(0.7),
+                          blurRadius: 8,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        GestureDetector(
+          onTap: _showProfileSheet,
+          child: _avatar(46, 15),
+        ),
+      ],
+    );
+  }
+
+  Widget _avatar(double size, double fontSize) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [_Palette.red, _Palette.darkRed],
+        ),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
+        boxShadow: [
+          BoxShadow(
+            color: _Palette.red.withOpacity(0.35),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Center(
+        child: Text(
+          _initials(),
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: fontSize,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAlertsPage() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const AlertsPage(showBottomNav: false),
+      ),
+    );
+  }
+
+  void _showProfileSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      elevation: 0,
+      builder: (_) => ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: Container(
+            decoration: BoxDecoration(
+              color: _Palette.bg2.withOpacity(0.92),
+              border: const Border(
+                top: BorderSide(color: _Palette.glassBorder),
+              ),
+            ),
+            child: SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.18),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 22),
+                    Row(
+                      children: [
+                        _avatar(52, 17),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _studentInfo?.fullName ?? '',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.w800,
+                                  color: _Palette.textPrimary,
+                                ),
+                              ),
+                              if ((_studentInfo?.uniqueID ?? '').isNotEmpty)
+                                Padding(
+                                  padding: const EdgeInsets.only(top: 4),
+                                  child: Text(
+                                    'ID: ${_studentInfo!.uniqueID}',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      color: _Palette.textSecondary,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 22),
+                    Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _logout();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _Palette.red.withOpacity(0.10),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: _Palette.red.withOpacity(0.35),
+                            ),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(
+                                Icons.logout_rounded,
+                                color: _Palette.brightRed,
+                                size: 20,
+                              ),
+                              SizedBox(width: 12),
+                              Text(
+                                'Logout',
+                                style: TextStyle(
+                                  color: _Palette.brightRed,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ── NEXT TRIP CARD ──
+  Widget _buildLiveTrackerCard() {
+    final routeName = _studentInfo?.routeName ?? 'Loading...';
+    final busNumber = _studentInfo?.busNumber ?? '...';
+    final stopName = _studentInfo?.stopName ?? '...';
+    final routePts = _routePoints.isEmpty ? [_busLocation, _myStop] : _routePoints;
+
+    final String badgeText = !_isConnected
+        ? 'OFFLINE'
+        : (_eta == 'Arriving!' ? 'ARRIVING' : 'ON TIME');
+    final Color badgeColor =
+        !_isConnected ? _Palette.textMuted : _Palette.brightRed;
+    final Color badgeBg = !_isConnected
+        ? Colors.white.withOpacity(0.06)
+        : _Palette.red.withOpacity(0.16);
+    final Color badgeBorder = !_isConnected
+        ? _Palette.glassBorder
+        : _Palette.red.withOpacity(0.35);
+
+    return _Glass(
+      radius: 28,
+      glow: true,
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Text(
+                  'Route $routeName',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: _Palette.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: badgeBg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: badgeBorder),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: BoxDecoration(
+                        color: badgeColor,
+                        shape: BoxShape.circle,
+                        boxShadow: _isConnected
+                            ? [
+                                BoxShadow(
+                                  color: _Palette.brightRed.withOpacity(0.7),
+                                  blurRadius: 6,
+                                ),
+                              ]
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      badgeText,
+                      style: TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 0.8,
+                        fontWeight: FontWeight.w700,
+                        color: badgeColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _tripStat(
+                  Icons.directions_bus_rounded,
+                  busNumber,
+                  'Your bus',
+                ),
+              ),
+              Expanded(
+                child: _tripStat(
+                  Icons.access_time_rounded,
+                  _eta,
+                  'Away',
+                  accent: true,
+                ),
+              ),
+              Expanded(
+                child: _tripStat(
+                  Icons.location_on_outlined,
+                  stopName,
+                  'Next stop',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: Stack(
+              children: [
+                SizedBox(
+                  height: 170,
+                  child: FlutterMap(
+                    mapController: _mapController,
+                    options: MapOptions(
+                      initialCenter: _busLocation,
+                      initialZoom: 14.0,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.all,
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: _darkTiles,
+                        subdomains: MapService.subdomains,
+                        userAgentPackageName: 'com.example.safeway',
+                        maxZoom: 19,
+                      ),
+                      PolylineLayer(
+                        polylines: [
+                          Polyline(
+                            points: routePts,
+                            strokeWidth: 8.0,
+                            color: _Palette.red.withOpacity(0.28),
+                          ),
+                          Polyline(
+                            points: routePts,
+                            strokeWidth: 3.5,
+                            color: _Palette.brightRed,
+                          ),
+                        ],
+                      ),
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _busLocation,
+                            width: 90,
+                            height: 70,
+                            child: MapService.buildBusMarker(
+                              busCode: 'BUS',
+                              isLive: _isConnected,
+                            ),
+                          ),
+                          Marker(
+                            point: _myStop,
+                            width: 90,
+                            height: 70,
+                            child: MapService.buildStudentMarker(
+                              label: 'Stop',
+                              isLive: true,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                // thin border over the map
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _Palette.glassBorder),
+                      ),
+                    ),
+                  ),
+                ),
+                // live pill
+                Positioned(
+                  left: 10,
+                  top: 10,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.55),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _Palette.glassBorder),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: BoxDecoration(
+                                color: _isConnected
+                                    ? _Palette.brightRed
+                                    : _Palette.textMuted,
+                                shape: BoxShape.circle,
+                                boxShadow: _isConnected
+                                    ? [
+                                        BoxShadow(
+                                          color: _Palette.brightRed
+                                              .withOpacity(0.7),
+                                          blurRadius: 6,
+                                        ),
+                                      ]
+                                    : null,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              _isConnected ? 'LIVE · $_eta' : 'CONNECTING',
+                              style: const TextStyle(
+                                fontSize: 10,
+                                letterSpacing: 0.6,
+                                fontWeight: FontWeight.w700,
+                                color: _Palette.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'ARRIVAL AT YOUR STOP',
+                      style: TextStyle(
+                        fontSize: 10,
+                        letterSpacing: 1.0,
+                        fontWeight: FontWeight.w700,
+                        color: _Palette.textMuted,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _eta == 'Loading...' ? '--:--' : _eta,
+                      style: const TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: -0.4,
+                        color: _Palette.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _RedButton(
+                label: 'Track bus',
+                icon: Icons.arrow_forward_rounded,
+                onPressed: _openFullMap,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tripStat(
+    IconData icon,
+    String value,
+    String label, {
+    bool accent = false,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(
+            color: accent ? _Palette.red.withOpacity(0.16) : _Palette.glassFill,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: accent
+                  ? _Palette.red.withOpacity(0.35)
+                  : _Palette.glassBorder,
+            ),
+          ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: accent ? _Palette.brightRed : _Palette.textSecondary,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+            color: _Palette.textPrimary,
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          label,
+          style: const TextStyle(fontSize: 11, color: _Palette.textMuted),
+        ),
+      ],
+    );
+  }
+
+  void _openFullMap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TrackBusScreen(
+          busNumber: 'Bus #${_studentInfo?.busNumber ?? '101'}',
+          routeName: _studentInfo?.routeName ?? 'Morning Route',
+          myStop: _myStop,
+          pickupStopName: _studentInfo?.stopName ?? 'Your Stop',
+          pickupTime: '7:40 AM',
+          arrivalStopName: 'Main Campus',
+          arrivalTime: '8:15 AM',
+          // driverPhone: _studentInfo?.stopName,
+        ),
+      ),
+    );
+  }
+
+  // ── STOPS TIMELINE CARD ──
+  Widget _buildStopsCard() {
+    // First two stops are illustrative; the middle one reflects the
+    // student's real assigned stop from the database.
+    final myStop = _studentInfo?.stopName ?? 'Your Stop';
+
+    return _Glass(
+      radius: 26,
+      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 18),
+      child: Column(
+        children: [
+          _stopRow(
+            name: 'Imperial Park',
+            time: '07:30 AM',
+            status: _StopStatus.passed,
+            isFirst: true,
+          ),
+          _stopRow(name: myStop, time: '07:45 AM', status: _StopStatus.current),
+          _stopRow(
+            name: 'Cedar Grove School',
+            time: '08:00 AM',
+            status: _StopStatus.upcoming,
+            isLast: true,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _stopRow({
+    required String name,
+    required String time,
+    required _StopStatus status,
+    bool isFirst = false,
+    bool isLast = false,
+  }) {
+    final bool isCurrent = status == _StopStatus.current;
+    final bool isPassed = status == _StopStatus.passed;
+
+    // Progress line: red for the part of the trip already covered.
+    final Color progressLine = _Palette.red.withOpacity(0.55);
+    final Color topLine =
+        (isPassed || isCurrent) ? progressLine : _Palette.divider;
+    final Color bottomLine = isPassed ? progressLine : _Palette.divider;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            SizedBox(
+              width: 24,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: isFirst
+                        ? const SizedBox()
+                        : Container(width: 2, color: topLine),
+                  ),
+                  Container(
+                    width: 14,
+                    height: 14,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: isCurrent
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [_Palette.brightRed, _Palette.darkRed],
+                            )
+                          : null,
+                      color: isCurrent
+                          ? null
+                          : (isPassed ? _Palette.burgundy : Colors.transparent),
+                      border: Border.all(
+                        color: isCurrent
+                            ? _Palette.brightRed
+                            : (isPassed
+                                ? _Palette.darkRed
+                                : Colors.white.withOpacity(0.25)),
+                        width: 2,
+                      ),
+                      boxShadow: isCurrent
+                          ? [
+                              BoxShadow(
+                                color: _Palette.red.withOpacity(0.55),
+                                blurRadius: 12,
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: isCurrent
+                        ? const Icon(Icons.circle, size: 6, color: Colors.white)
+                        : null,
+                  ),
+                  Expanded(
+                    child: isLast
+                        ? const SizedBox()
+                        : Container(width: 2, color: bottomLine),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    name,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: isPassed
+                          ? _Palette.textMuted
+                          : _Palette.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    time,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: _Palette.textMuted,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _statusPill(status),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _statusPill(_StopStatus status) {
+    late String label;
+    late Color fg;
+    bool filled = false;
+    switch (status) {
+      case _StopStatus.passed:
+        label = 'PASSED';
+        fg = _Palette.textMuted;
+        break;
+      case _StopStatus.current:
+        label = 'YOUR STOP';
+        fg = _Palette.brightRed;
+        filled = true;
+        break;
+      case _StopStatus.upcoming:
+        label = 'UP NEXT';
+        fg = _Palette.textSecondary;
+        break;
+    }
+    if (!filled) {
+      return Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.w700,
+          color: fg,
+        ),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: _Palette.red.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _Palette.red.withOpacity(0.35)),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          letterSpacing: 0.8,
+          fontWeight: FontWeight.w700,
+          color: fg,
+        ),
+      ),
+    );
+  }
+
+  // ── QUICK ACTIONS ──
+  Widget _buildQuickActions() {
+    return Row(
+      children: [
+        Expanded(
+          child: _quickActionTile(
+            icon: Icons.location_on_outlined,
+            label: 'Pickup station',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const ChangePickupStationScreen(),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _quickActionTile(
+            icon: Icons.swap_horiz_rounded,
+            label: 'Change route',
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const RequestRouteChangePage()),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _quickActionTile({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: _Glass(
+        radius: 22,
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: _Palette.red.withOpacity(0.16),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: _Palette.red.withOpacity(0.35)),
+                  ),
+                  child: Icon(icon, color: _Palette.brightRed, size: 19),
+                ),
+                const Icon(
+                  Icons.north_east_rounded,
+                  size: 16,
+                  color: _Palette.textMuted,
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: _Palette.textPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── BOTTOM NAV — floating glass bar ──
+  Widget _buildBottomNav() {
+    final r = BorderRadius.circular(32);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      decoration: BoxDecoration(
+        borderRadius: r,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.55),
+            blurRadius: 26,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: r,
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: _Palette.surface.withOpacity(0.78),
+              borderRadius: r,
+              border: Border.all(color: _Palette.glassBorder),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _navItem(0, Icons.home_outlined, Icons.home_rounded, 'Home'),
+                _navItem(1, Icons.near_me_outlined, Icons.near_me, 'Track'),
+                _navItem(
+                  2,
+                  Icons.notifications_none_rounded,
+                  Icons.notifications_rounded,
+                  'Alerts',
+                ),
+                _navItem(
+                  3,
+                  Icons.person_outline_rounded,
+                  Icons.person_rounded,
+                  'Profile',
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navItem(int index, IconData icon, IconData activeIcon, String label) {
+    final bool active = _selectedTab == index;
+    return GestureDetector(
+      onTap: () {
+        setState(() => _selectedTab = index);
+      },
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 550),
+        curve: Curves.fastOutSlowIn,
+        padding: active
+            ? const EdgeInsets.symmetric(horizontal: 16, vertical: 10)
+            : const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: active ? null : Colors.white.withOpacity(0.05),
+          gradient: active ? _Palette.redGradient : null,
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: active
+              ? [
+                  BoxShadow(
+                    color: _Palette.red.withOpacity(0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 5),
+                  ),
+                ]
+              : null,
+        ),
+        child: AnimatedSize(
+          duration: const Duration(milliseconds: 500),
+          curve: Curves.fastLinearToSlowEaseIn,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 350),
+                switchInCurve: Curves.easeOutBack,
+                switchOutCurve: Curves.easeInBack,
+                transitionBuilder: (child, anim) => FadeTransition(
+                  opacity: anim,
+                  child: ScaleTransition(scale: anim, child: child),
+                ),
+                child: Icon(
+                  active ? activeIcon : icon,
+                  key: ValueKey(active ? activeIcon : icon),
+                  size: 22,
+                  color: active ? Colors.white : _Palette.textMuted,
+                ),
+              ),
+              if (active) ...[
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _StopStatus { passed, current, upcoming }
